@@ -1,0 +1,1729 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payroll Watch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233454D1'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='white' font-family='Georgia'%3E%24%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="bqe-board.js"></script>
+<style>
+  :root {
+    --bg: #F5F6F9;
+    --surface: #FFFFFF;
+    --surface-alt: #ECEFF5;
+    --border: #DDE1EA;
+    --ink: #16213E;
+    --ink-2: #47517A;
+    --ink-3: #8890AC;
+    --accent: #3454D1;
+    --accent-soft: #E7EBFB;
+    --good: #1E8A5F;
+    --good-soft: #E4F5EC;
+    --warning: #B8801E;
+    --warning-soft: #FBF1DE;
+    --critical: #C23B3B;
+    --critical-soft: #FBE7E4;
+    --seg-main: #3454D1;
+    --seg-premium: #1E8A8A;
+    --seg-low: #7A4FA0;
+    --shadow: 0 1px 2px rgba(22,33,62,0.06), 0 6px 16px rgba(22,33,62,0.06);
+    --serif: Georgia, "Iowan Old Style", "Source Serif 4", "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0C1220; --surface: #131A2B; --surface-alt: #1B2438; --border: #29334A;
+      --ink: #E9ECF6; --ink-2: #B0B7D1; --ink-3: #7C86A3;
+      --accent: #7C93F5; --accent-soft: #1E2748;
+      --good: #4FC090; --good-soft: #123024;
+      --warning: #E3AC49; --warning-soft: #34240A;
+      --critical: #E2685A; --critical-soft: #38201B;
+      --seg-main: #7C93F5; --seg-premium: #4FBEBE; --seg-low: #B98CDB;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C1220; --surface: #131A2B; --surface-alt: #1B2438; --border: #29334A;
+    --ink: #E9ECF6; --ink-2: #B0B7D1; --ink-3: #7C86A3;
+    --accent: #7C93F5; --accent-soft: #1E2748;
+    --good: #4FC090; --good-soft: #123024;
+    --warning: #E3AC49; --warning-soft: #34240A;
+    --critical: #E2685A; --critical-soft: #38201B;
+    --seg-main: #7C93F5; --seg-premium: #4FBEBE; --seg-low: #B98CDB;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F6F9; --surface: #FFFFFF; --surface-alt: #ECEFF5; --border: #DDE1EA;
+    --ink: #16213E; --ink-2: #47517A; --ink-3: #8890AC;
+    --accent: #3454D1; --accent-soft: #E7EBFB;
+    --good: #1E8A5F; --good-soft: #E4F5EC;
+    --warning: #B8801E; --warning-soft: #FBF1DE;
+    --critical: #C23B3B; --critical-soft: #FBE7E4;
+    --seg-main: #3454D1; --seg-premium: #1E8A8A; --seg-low: #7A4FA0;
+    --shadow: 0 1px 2px rgba(22,33,62,0.06), 0 6px 16px rgba(22,33,62,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); }
+  .dash { font-family: var(--sans); background: var(--bg); color: var(--ink); min-height: 100%; padding: 32px 20px 80px; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  .masthead { display: flex; flex-direction: column; gap: 6px; }
+  .back-link { font-size: 12px; }
+  .back-link a { color: var(--ink-3); text-decoration: none; }
+  .back-link a:hover { color: var(--accent); text-decoration: underline; }
+  .eyebrow { font: 600 11px/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); }
+  h1 { font: 400 34px/1.15 var(--serif); margin: 2px 0 0; color: var(--ink); text-wrap: balance; }
+  .scope-line { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+  .scope-line b { color: var(--ink); font-weight: 600; }
+  .snapshot-tag {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+    font-size: 12px; color: var(--ink-3); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 10px 4px 8px; width: fit-content;
+  }
+  .snapshot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); flex: none; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  @media (max-width: 640px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px;
+    cursor: pointer; text-align: left; font-family: var(--sans); width: 100%; margin: 0;
+    appearance: none; -webkit-appearance: none; color: inherit;
+  }
+  .kpi:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .kpi:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .kpi.critical { border-color: color-mix(in srgb, var(--critical) 35%, var(--border)); }
+  .kpi.active { border-color: var(--accent); background: var(--accent-soft); }
+  .kpi-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  .kpi-value { font: 400 26px/1.1 var(--serif); font-variant-numeric: tabular-nums; }
+  .kpi-value.crit { color: var(--critical); }
+  .kpi-sub { font-size: 12px; color: var(--ink-2); }
+
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .section-title { font: 400 19px/1.2 var(--serif); margin: 0; }
+  .section-note { font-size: 12.5px; color: var(--ink-3); }
+  .hero-title { font: 400 24px/1.2 var(--serif); margin: 0; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; box-shadow: var(--shadow); }
+  .bar-row { display: grid; grid-template-columns: 190px 1fr 150px; align-items: center; gap: 14px; padding: 9px 0; cursor: default; }
+  .bar-row + .bar-row { border-top: 1px solid var(--border); }
+  .bar-label { font-size: 13.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .bar-track { position: relative; height: 10px; background: var(--surface-alt); border-radius: 6px; overflow: hidden; }
+  .bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 6px; }
+  .bar-figs { text-align: right; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar-figs b { color: var(--ink); font-size: 14px; }
+  .bar-row.clickable { cursor: pointer; }
+  .bar-row.clickable:hover .bar-label { color: var(--accent); }
+  .bar-chevron { display: inline-block; width: 9px; flex: none; color: var(--ink-3); font-size: 10px; transition: transform 0.15s ease; }
+  .bar-chevron.open { transform: rotate(90deg); }
+  .ticket-drilldown { padding: 6px 4px 16px 26px; display: flex; flex-direction: column; gap: 2px; }
+  .ticket-item { padding: 8px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+  .ticket-item:first-child { border-top: none; padding-top: 4px; }
+  .ticket-item-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ticket-item-head a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .ticket-item-head a:hover { text-decoration: underline; }
+  .ticket-item-status { font-size: 11.5px; color: var(--ink-3); }
+  .ticket-item-subject { color: var(--ink); margin-top: 2px; }
+  .ticket-item-meta { color: var(--ink-2); font-size: 11.5px; margin-top: 2px; }
+  .ticket-item-snippet { color: var(--ink-3); font-size: 11.5px; margin-top: 3px; font-style: italic; }
+  .ticket-item.reviewed { opacity: 0.55; }
+  .ticket-item.reviewed .ticket-item-subject { text-decoration: line-through; text-decoration-color: var(--ink-3); }
+  .ticket-item-review { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+  .review-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); cursor: pointer; user-select: none; }
+  .review-toggle input { cursor: pointer; }
+  .review-note-input {
+    flex: 1; min-width: 140px; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: var(--sans);
+  }
+  .recheck-toggle { color: var(--warning); font-weight: 600; }
+  .table-recheck { margin-top: 4px; }
+  .review-history { margin-top: 5px; font-size: 11.5px; color: var(--ink-3); width: 100%; }
+  .review-history summary { cursor: pointer; color: var(--ink-2); }
+  .review-history-item { padding: 3px 0; border-top: 1px solid var(--border); }
+  .review-history-item:first-child { border-top: none; }
+  .review-history-date { font-weight: 600; color: var(--ink-2); margin-right: 6px; }
+  table.data-table tbody tr.reviewed { opacity: 0.55; }
+  table.data-table tbody tr.reviewed .subject-cell { text-decoration: line-through; text-decoration-color: var(--ink-3); }
+  .table-note-input {
+    width: 100%; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    border-radius: 6px; padding: 3px 7px; font-size: 12px; font-family: var(--sans);
+  }
+  .kpi-drilldown { margin-top: -8px; }
+
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .pill-toggle {
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+    border-radius: 999px; padding: 7px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    font-family: var(--sans);
+  }
+  .pill-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .search-input {
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-family: var(--sans); min-width: 220px;
+  }
+  .filter-label { font-size: 12.5px; color: var(--ink-3); font-weight: 600; }
+
+  .chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-decoration: none; }
+  .chip-noreply { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+  .chip-awaiting { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+  .chip-backforth { background: color-mix(in srgb, var(--seg-low) 18%, transparent); color: var(--seg-low); }
+  .chip-gal { background: color-mix(in srgb, var(--seg-premium) 18%, transparent); color: var(--seg-premium); }
+  .chip-es { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  a.chip:hover { text-decoration: underline; }
+  .chip-offhours { background: color-mix(in srgb, var(--ink-3) 20%, transparent); color: var(--ink-2); }
+
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--ink-3); font-size: 13.5px; }
+  .panel-empty { font-size: 12.5px; color: var(--ink-3); padding: 8px 0; }
+
+  .suggestion-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
+  .suggestion-item:first-child { border-top: none; padding-top: 2px; }
+  .suggestion-check {
+    flex: none; width: 20px; height: 20px; border: 1.5px solid var(--border); border-radius: 5px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    background: var(--surface); color: transparent; font-size: 13px; font-weight: 700;
+  }
+  .suggestion-check:hover { border-color: var(--accent); }
+  .suggestion-check.done { background: var(--good); border-color: var(--good); color: #fff; }
+  .suggestion-body { flex: 1; min-width: 0; }
+  .suggestion-text { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
+  .suggestion-text b { font-weight: 700; }
+  .suggestion-text a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .suggestion-text a:hover { text-decoration: underline; }
+  .suggestion-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .suggestion-restore {
+    flex: none; font-size: 11.5px; font-weight: 600; color: var(--accent); background: none; border: none;
+    cursor: pointer; font-family: var(--sans); padding: 2px 0; margin-top: 2px;
+  }
+  .suggestion-restore:hover { text-decoration: underline; }
+
+  .trend-legend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12.5px; color: var(--ink-2); flex-wrap: wrap; }
+  .trend-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .trend-legend .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .trend-svg-wrap { width: 100%; overflow-x: auto; }
+  .trend-svg { width: 100%; min-width: 640px; height: auto; display: block; }
+  .trend-axis-label { font: 500 10.5px var(--sans); fill: var(--ink-3); }
+  .trend-gridline { stroke: var(--border); stroke-width: 1; }
+
+  .breakdown-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .breakdown-grid { grid-template-columns: 1fr; } }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table thead th {
+    position: sticky; top: 0; background: var(--surface); text-align: left; font-size: 11px;
+    letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); font-weight: 700;
+    padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; white-space: nowrap;
+  }
+  table.data-table thead th:not([data-key]) { cursor: default; }
+  table.data-table thead th .arrow { opacity: 0.25; margin-left: 4px; }
+  table.data-table thead th.sorted .arrow { opacity: 1; color: var(--accent); }
+  table.data-table tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.data-table tbody tr:hover { background: var(--surface-alt); }
+  table.data-table a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  table.data-table a:hover { text-decoration: underline; }
+  .table-wrap { overflow-x: auto; }
+  .subject-cell { max-width: 320px; }
+  .flags-cell { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px; font-size: 12.5px; color: var(--ink-2); }
+  .pager button { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-family: var(--sans); }
+  .pager button:disabled { opacity: 0.4; cursor: default; }
+
+  .agent-toolbar { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .copy-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 6px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied { border-color: var(--good); color: var(--good); }
+
+  .checkin-status { font-size: 11.5px; margin-top: 6px; }
+  .checkin-status-done { color: var(--good); font-weight: 600; }
+
+  details.panel summary { cursor: pointer; font: 400 15px/1.2 var(--serif); list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.panel summary::-webkit-details-marker { display: none; }
+  details.panel summary::after { content: "+"; font-family: var(--sans); font-size: 18px; color: var(--ink-3); }
+  details.panel[open] summary::after { content: "\2212"; }
+  .method-body { margin-top: 14px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+  @media (max-width: 760px) { .method-body { grid-template-columns: 1fr; } }
+  .method-body h4 { font: 700 12px var(--sans); letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+  .method-body ul { margin: 0; padding-left: 18px; }
+  .method-body li { margin-bottom: 5px; }
+  .method-body code { background: var(--surface-alt); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .method-full { grid-column: 1 / -1; }
+  .method-lede { margin: 0; }
+
+  footer.foot { text-align: center; font-size: 11.5px; color: var(--ink-3); padding-top: 4px; }
+
+  @media (prefers-reduced-motion: no-preference) { .bar-fill { transition: width 0.5s ease; } }
+
+  /* ---- hosted board: top bar, sign-in, who's viewing ---- */
+  .topbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); }
+  .viewers { display: inline-flex; align-items: center; gap: 4px; }
+  .viewer-dot { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font: 700 11px var(--sans); background: var(--accent-soft); color: var(--accent); border: 1px solid var(--border); }
+  .viewer-dot.me { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .top-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 5px 12px;
+    font: 600 12px var(--sans); cursor: pointer; }
+  .top-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .snapshot-dot.live { background: var(--good); }
+  .snapshot-dot.stale { background: var(--critical); }
+  .signin { max-width: 440px; margin: 12vh auto 0; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .signin p { color: var(--ink-2); font-size: 14px; line-height: 1.5; margin: 0; }
+  .signin .msg { color: var(--critical); font-size: 13px; }
+  .primary-btn { border: none; background: var(--accent); color: #fff; border-radius: 8px; padding: 11px 20px; font: 600 14px var(--sans); cursor: pointer; }
+  .primary-btn:hover { filter: brightness(1.08); }
+  [hidden] { display: none !important; }
+
+  /* ---- live queue ---- */
+  .queue-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 900px) { .queue-grid { grid-template-columns: 1fr; } }
+  .q-status { display: inline-flex; align-items: center; gap: 6px; font: 700 11px var(--sans); letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px; }
+  .q-open { background: var(--good-soft); color: var(--good); }
+  .q-closed { background: var(--surface-alt); color: var(--ink-3); }
+  .q-warn { background: var(--warning-soft); color: var(--warning); }
+  .q-crit { background: var(--critical-soft); color: var(--critical); }
+  .q-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  @media (max-width: 640px) { .q-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .q-tile { background: var(--surface-alt); border-radius: 8px; padding: 10px 12px; }
+  .q-tile .kpi-value { font-size: 22px; }
+  .q-tile.flash { animation: flash 1s steps(2, start) infinite; background: var(--critical-soft); }
+  .q-tile.flash .kpi-value { color: var(--critical); }
+  @keyframes flash { to { background: var(--surface-alt); } }
+  @media (prefers-reduced-motion: reduce) { .q-tile.flash { animation: none; } }
+  .agent-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .agent-row:first-child { border-top: none; }
+  .agent-name { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-time { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .st { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .st-green { background: var(--good-soft); color: var(--good); }
+  .st-red { background: var(--critical-soft); color: var(--critical); }
+  .st-yellow { background: var(--warning-soft); color: var(--warning); }
+  .st-grey { background: var(--surface-alt); color: var(--ink-3); }
+  .spark { width: 100%; height: 70px; display: block; margin-top: 12px; }
+  .spark-legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--ink-3); margin-top: 4px; flex-wrap: wrap; }
+  .spark-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .spark-legend i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+  .calls-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .mini-list { margin-top: 12px; font-size: 12.5px; }
+  .mini-list .row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+  .mini-list .row:first-child { border-top: none; }
+  .mini-list .muted { color: var(--ink-3); }
+  .mini-list a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .mini-list a:hover { text-decoration: underline; }
+  .review-by { font-size: 11px; color: var(--ink-3); }
+  .chip-pending { background: var(--surface-alt); color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<div class="dash">
+  <div class="wrap">
+
+    <div class="topbar" id="topbar" hidden>
+      <span class="viewers" id="viewers"></span>
+      <span id="viewerName"></span>
+      <button type="button" class="top-btn" id="themeBtn">Theme</button>
+      <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
+    </div>
+
+    <div class="signin" id="signin" hidden>
+      <div class="eyebrow">Support Operations &middot; Payroll</div>
+      <h1>Payroll Watch</h1>
+      <p>Open Payroll tickets that may need attention, Payroll escalations, and the live Payroll Specialist queue.</p>
+      <button type="button" class="primary-btn" id="signInBtn">Sign in with RingCentral</button>
+      <div class="msg" id="signinMsg"></div>
+    </div>
+
+    <div id="board" hidden style="display:flex; flex-direction:column; gap:28px;">
+    <div class="masthead">
+      <div class="eyebrow">Support Operations &middot; Payroll</div>
+      <h1>Payroll Watch</h1>
+      <div class="scope-line">
+        <b id="scopeOpen">&mdash;</b> open Payroll tickets (not yet Solved) &middot; <b id="scopeFlagged">&mdash;</b> flagged as possibly dropped &mdash;
+        no agent reply yet, or the customer is waiting on us
+      </div>
+      <div class="snapshot-tag"><span class="snapshot-dot" id="liveDot"></span><span id="genDate">Loading&hellip;</span></div>
+    </div>
+
+    <div id="queueSection">
+      <div class="section-head">
+        <h2 class="hero-title">Payroll Specialist queue, live</h2>
+        <span class="section-note" id="queueNote"></span>
+      </div>
+      <div class="queue-grid" style="margin-top:12px;">
+        <div class="panel">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="q-status q-closed" id="queueStatus">&mdash;</span>
+            <span class="section-note" id="queueHours">Open M&ndash;F 6am&ndash;4pm Pacific</span>
+          </div>
+          <div class="q-tiles" id="queueTiles"></div>
+          <svg class="spark" id="queueSpark" viewBox="0 0 600 70" preserveAspectRatio="none" role="img" aria-label="Callers waiting and agents available today"></svg>
+          <div class="spark-legend"><span><i style="background:var(--critical)"></i>Callers waiting</span><span><i style="background:var(--good)"></i>Agents available</span><span id="sparkRange"></span></div>
+        </div>
+        <div class="panel">
+          <div class="section-head"><h2 class="section-title">Agents on Payroll</h2><span class="section-note" id="agentsNote"></span></div>
+          <div id="queueAgents" style="margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="callsSection">
+      <div class="section-head">
+        <h2 class="section-title">Payroll calls, last 30 days</h2>
+        <span class="section-note" id="callsNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <div class="calls-kpis" id="callsKpis"></div>
+        <div class="breakdown-grid" style="margin-top:16px;">
+          <div><div class="kpi-label">Missed calls</div><div class="mini-list" id="callsMissed"></div></div>
+          <div><div class="kpi-label">Who answered</div><div class="mini-list" id="callsWho"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <details class="panel" id="suggestionsDetails">
+      <summary>
+        <span class="section-title">Where to Focus</span>
+        <span class="section-note" id="suggestionsCount" style="font-family:var(--sans); font-weight:400;"></span>
+      </summary>
+      <div style="margin-top:14px;">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+          <button class="pill-toggle" id="suggestionsViewToggle" aria-pressed="false">Show completed</button>
+        </div>
+        <div id="suggestionsPanel"></div>
+      </div>
+    </details>
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div id="kpiDrilldownWrap"></div>
+
+    <div id="tierSection">
+      <div class="section-head">
+        <h2 class="hero-title">Flagged tickets, by urgency</h2>
+        <span class="section-note">Needs attention now (&le;48h since last activity) &middot; Aging (2&ndash;7 days) &middot; Long-stale backlog (7+ days) &middot; excludes GAL &amp; Gusto Incidents</span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="tierChart"></div>
+    </div>
+
+    <div id="assigneeSection">
+      <div class="section-head">
+        <h2 class="section-title">Flagged tickets, by assignee</h2>
+        <span class="section-note">Excludes GAL &amp; Gusto Incidents &middot; click an agent to expand their list &middot; use Copy list to export a plain-text list for that agent</span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="assigneeChart"></div>
+    </div>
+
+    <div id="backforthAssigneeSection">
+      <div class="section-head">
+        <h2 class="section-title">Heavy back-and-forth, by assignee</h2>
+        <span class="section-note">Not urgent by itself &mdash; long/complicated threads worth a look regardless of whose turn it is to reply &middot; excludes GAL &amp; Gusto Incidents</span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="backforthAssigneeChart"></div>
+    </div>
+
+    <div id="esPayrollSection">
+      <div class="section-head">
+        <h2 class="section-title">ES Escalations (Payroll)</h2>
+        <span class="section-note" id="esPayrollNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="esPayrollList"></div>
+    </div>
+
+    <div id="galSection">
+      <div class="section-head">
+        <h2 class="section-title">With Dev Team (GAL)</h2>
+        <span class="section-note" id="galNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="galList"></div>
+    </div>
+
+    <div id="gustoSection">
+      <div class="section-head">
+        <h2 class="section-title">Gusto Incidents</h2>
+        <span class="section-note" id="gustoNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="gustoList"></div>
+    </div>
+
+    <div id="tableSection">
+      <div class="section-head">
+        <h2 class="section-title">Open Payroll tickets</h2>
+        <span class="section-note">Excludes tickets With Dev Team (GAL) and Gusto Incidents &mdash; see those sections above</span>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <div class="filters" style="margin-bottom:14px;">
+          <span class="filter-label">Filter:</span>
+          <button class="pill-toggle" data-table-filter="all" aria-pressed="true">All</button>
+          <button class="pill-toggle" data-table-filter="flagged" aria-pressed="false">Flagged only</button>
+          <button class="pill-toggle" data-table-filter="noreply" aria-pressed="false">No agent reply</button>
+          <button class="pill-toggle" data-table-filter="awaiting" aria-pressed="false">Awaiting our reply</button>
+          <button class="pill-toggle" data-table-filter="backforth" aria-pressed="false">Heavy back-and-forth</button>
+          <input type="text" class="search-input" id="tableSearch" placeholder="Search subject or requester&hellip;">
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="ticketTable">
+            <thead>
+              <tr>
+                <th data-key="id">Ticket<span class="arrow">&#9662;</span></th>
+                <th data-key="subject">Subject<span class="arrow">&#9662;</span></th>
+                <th data-key="requester">Requester / Org<span class="arrow">&#9662;</span></th>
+                <th data-key="assignee">Assignee<span class="arrow">&#9662;</span></th>
+                <th data-key="status">Status<span class="arrow">&#9662;</span></th>
+                <th data-key="hours">Hours since activity<span class="arrow">&#9662;</span></th>
+                <th data-key="comments">Comments<span class="arrow">&#9662;</span></th>
+                <th data-key="flags">Flags<span class="arrow">&#9662;</span></th>
+                <th data-key="reviewed">Reviewed<span class="arrow">&#9662;</span></th>
+                <th>Notes</th>
+                <th>Internal note</th>
+              </tr>
+            </thead>
+            <tbody id="ticketTableBody"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="ticketPager"></div>
+      </div>
+    </div>
+
+    <div id="trendSection">
+      <div class="section-head">
+        <h2 class="section-title">Open &amp; flagged counts over time</h2>
+        <span class="section-note" id="trendNote">Every poll run (7AM &amp; 11AM Pacific, weekdays)</span>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <div class="trend-legend" id="trendLegend"></div>
+        <div class="trend-svg-wrap" id="trendChart"></div>
+      </div>
+    </div>
+
+    <div class="breakdown-grid">
+      <div>
+        <div class="section-head"><h2 class="section-title">By status</h2><span class="section-note">Excludes GAL &amp; Gusto Incidents</span></div>
+        <div class="panel" id="statusChart" style="margin-top:12px;"></div>
+      </div>
+      <div>
+        <div class="section-head"><h2 class="section-title">By flag reason</h2><span class="section-note">Excludes GAL &amp; Gusto Incidents</span></div>
+        <div class="panel" id="reasonChart" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <div id="offHoursSection">
+      <div class="section-head">
+        <h2 class="section-title">Created off-hours or on a weekend</h2>
+        <span class="section-note">All open tickets, GAL &amp; Gusto Incidents included &mdash; business hours is Payroll's real 6am-4pm M-F Pacific window</span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="offHoursChart"></div>
+    </div>
+
+    <details class="panel">
+      <summary>Methodology &amp; scope notes</summary>
+      <div class="method-body">
+        <div class="method-full">
+          <h4>Data source</h4>
+          <p class="method-lede">
+            Every ticket in the Zendesk Payroll group (<code>group_id 35523902508311</code>) with status New, Open,
+            Pending, or On Hold (i.e. not yet Solved). Tickets come from the support team's shared Zendesk store, which
+            reads Zendesk's change feed every 2 minutes; a ticket's comments are re-read whenever the ticket changes, to
+            see who commented last and how many public comments it has. This page doesn't pull anything itself: it
+            reads that store, the shared Jira store, and the RingCX snapshot the live wallboard already takes every minute.
+            Flags and hours are worked out in your browser, so they stay current between refreshes.
+          </p>
+        </div>
+        <div>
+          <h4>Flag definitions (what makes a ticket "flagged"/urgent)</h4>
+          <ul>
+            <li><b>No agent reply yet</b>: the ticket has been open 4+ hours with zero public comment from anyone other than the requester.</li>
+            <li><b>Awaiting our reply</b>: the requester's comment is the most recent public comment, and it's been 4+ hours since then.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Heavy back-and-forth (informational, not urgent by itself)</h4>
+          <ul>
+            <li>10 or more public comments on the ticket, regardless of whose turn it is to reply. This does <b>not</b> by itself make a ticket flagged/urgent &mdash; a long thread where we just replied and are waiting on the customer isn't a dropped ball on our side, even if the history is long. It's still worth a look, so it gets its own KPI tile and a dedicated "Heavy back-and-forth, by assignee" section instead of counting toward the urgent list.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Urgency tiers</h4>
+          <ul>
+            <li><b>Needs attention now</b>: flagged and last activity was within 48 hours.</li>
+            <li><b>Aging</b>: flagged, last activity 2&ndash;7 days ago.</li>
+            <li><b>Long-stale backlog</b>: flagged, last activity 7+ days ago &mdash; often a hygiene/closure issue rather than an active miss. A cluster of these are "pending" tickets where the customer replied last but the ticket never reopened &mdash; worth checking whether an automation gap is letting these silently sit.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Known caveats</h4>
+          <ul>
+            <li>"Hours since activity" is calendar time, not Payroll's real 6am&ndash;4pm Pacific business hours &mdash; a ticket that went quiet Friday evening will show more elapsed hours than the team was actually available to act on it.</li>
+            <li>Only public comments count toward the comment total and "last activity" &mdash; internal notes are excluded, matching what the requester actually sees.</li>
+            <li>Assignee reflects whoever is currently assigned in Zendesk at poll time, not who owned the ticket when it went stale.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>With Dev Team (GAL)</h4>
+          <ul>
+            <li>Detected by a <code>GAL-#####</code> pattern in the ticket subject &mdash; BQE's convention for a ticket linked to an Engineering Jira issue. These sit in their own section, and are <b>excluded from every other section on this page</b> (urgency tiers, by-assignee, by-status, by-reason, Where to Focus, and the main ticket table) so a GAL ticket never double-counts &mdash; they may be blocked on Dev, not on Support, so being on the list isn't automatically a dropped ball the way the other flags are.</li>
+            <li>A GAL ticket can still carry an urgency flag internally (e.g. the customer replied and we haven't followed up) &mdash; that still shows as a chip within the GAL section itself, it just isn't reflected in the KPI counts or charts for the non-GAL sections.</li>
+            <li>Every <code>GAL-#####</code> and <code>ES-#####</code> (Escalations) reference found in a ticket's subject renders as a clickable chip linking straight to that Jira issue on <code>bqetrack.atlassian.net</code> &mdash; wherever the ticket shows up on this page, GAL section or not (a ticket can carry more than one, e.g. a GAL plus one or two ES refs). Only <code>GAL-#####</code> still drives section membership/exclusion above; an ES-only reference doesn't move a ticket out of the normal flow.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Gusto Incidents</h4>
+          <ul>
+            <li>A ticket qualifies when the requester's email domain is <code>@gusto.com</code> <b>and</b> the Zendesk ticket type is "Incident" &mdash; both conditions matter, a non-incident ticket from Gusto stays in the normal flow. Gusto opens these to flag something on their end; they don't always need or get a public reply the way a real customer does (often resolved via an internal note or a call instead), so they're excluded from the reply-based flags rather than counting as a dropped ball.</li>
+            <li>Same exclusion treatment as GAL tickets &mdash; own section, excluded everywhere else on the page.</li>
+          </ul>
+        </div>
+        <div class="method-full">
+          <h4>ES Escalations (Payroll)</h4>
+          <ul>
+            <li>A cross-check slice of Jira's own Escalations (ES) project: open tickets (statusCategory &ne; Done &mdash; empirically the same population as "status &ne; Closed" for this project as of this build, though the two aren't guaranteed identical in theory) whose <code>components</code> field contains <b>Payroll</b> or <b>Reports - Payroll</b>. This is the exact same criteria as Jira's own saved filter <a href="https://bqetrack.atlassian.net/issues/?filter=40865" target="_blank" rel="noopener">40865</a> (<code>project = ES AND status != Closed AND component IN (Payroll, "Reports - Payroll")</code>), verified directly against Jira's filter API when this section was built &mdash; so this list can't quietly drift from what that saved filter shows.</li>
+            <li>No separate data pull &mdash; reads the shared Jira store, which picks up every ES change within about 5 minutes.</li>
+            <li>Each ES ticket is cross-referenced against Zendesk's real structured "ES Number" field (not a subject-text guess) on every currently open ticket tagged <code>jira_escalated</code> where <b>either</b> its CORE-Module is Payroll <b>or</b> its group is Payroll Specialist &mdash; broader than just this poll's own Payroll Specialist group scope, since a ticket can be escalated while sitting with a different team (e.g. Email Team) but still be a Payroll issue by module. A match shows "Linked from Zendesk #&hellip;" with that ticket's current status; no match means the ES ticket isn't currently linked from any open ticket meeting either criterion (e.g. the originating ticket has since been solved).</li>
+            <li>Its own independent population &mdash; not a slice of the open-ticket counts/charts above, and not affected by the GAL/Gusto exclusion rules (an ES ticket can be linked to a ticket that's also sitting in the GAL section, since GAL and ES references are independent tags on the same subject line).</li>
+          </ul>
+        </div>
+        <div>
+          <h4>What counts every open ticket vs. the working set</h4>
+          <ul>
+            <li>The "Open tickets" KPI and the top scope line are the only two numbers on this page that count every open ticket, GAL and Gusto Incidents included. Every other count, chart, and the main table work off the subset excluding both. The "Created Off-Hours" KPI and its chart are the one exception &mdash; they intentionally cover every open ticket, GAL/Gusto included, since arrival time is a separate question from who's handling the reply.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Created off-hours / weekend</h4>
+          <ul>
+            <li>Based on the ticket's creation timestamp converted to Pacific and compared against Payroll's real coverage window (Mon-Fri 6am-4pm Pacific &mdash; see [[payroll_business_hours]] in the team's own records; this is NOT the same as Zendesk's built-in business-hours schedules, which don't match). Three buckets: Business hours, After-hours (weekday outside 6am-4pm), and Weekend.</li>
+            <li>This only covers tickets that are currently still open &mdash; it's a snapshot of today's open backlog by arrival time, not a full historical rate across every Payroll ticket ever created (solved/closed tickets aren't in this poll's population at all). Read it as "of what's open right now, how much came in outside coverage hours," not as an all-time volume metric.</li>
+            <li>Tracked in the trend chart above (the "Off-hours/weekend" line). Counts saved before this board went live don't have it.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Exporting an agent's list</h4>
+          <ul>
+            <li>"Copy list" copies a plain-text ticket list (id, link, subject, hours, flags) to your clipboard for that agent &mdash; paste it into an email, Slack message, or Teams chat.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Reviewed checkbox &amp; notes</h4>
+          <ul>
+            <li>Every ticket &mdash; in the table and in every drilldown, including the ES Escalations (Payroll) section &mdash; has a Reviewed checkbox and a free-text note field, so you can mark what you've already looked at and leave a note without leaving the page.</li>
+            <li>These are <b>shared</b>: everyone who can open this board sees the same checkboxes and notes, with who changed them last and when. They stay on this board only; nothing is written to Zendesk or Jira.</li>
+            <li><b>Recheck:</b> once a ticket has been marked Reviewed on a prior calendar day, an extra "Reviewed &lt;date&gt; &mdash; recheck &amp; leave a fresh note?" checkbox appears next to its note. Checking it archives that note into a small "N earlier notes" history log (so the context isn't lost) and resets the ticket back to unreviewed with a blank note, ready for today's pass.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Live queue and calls</h4>
+          <ul>
+            <li>The queue panel shows the RingCX Payroll Specialist queue from the snapshot RingCX's wallboard data gives every minute: callers waiting, the longest wait (flashes red at 5 minutes), agents available, and today's presented, answered and abandoned calls. RingCX counts SLA as answered within 30 seconds.</li>
+            <li>"Agents on Payroll" lists everyone assigned to the Payroll queue in RingCX, plus anyone on a Payroll call right now. Colors follow RingCX's base states: green Available, red on a call, yellow Working-type statuses, grey breaks, lunch and logged out.</li>
+            <li>The 30-day call list comes from RingCX's call report, refreshed nightly, so today's calls show in the live counters and join the list tomorrow. "Missed" means the caller hung up while waiting or while an agent's phone was ringing.</li>
+          </ul>
+        </div>
+        <div class="method-full">
+          <h4>Recently checked in (internal note)</h4>
+          <ul>
+            <li>If the most recent comment on a ticket &mdash; of any kind, public or a private/internal note &mdash; is an internal note posted in Zendesk within the last 24 hours, this page shows "&#10003; Recently checked in" with the note text.</li>
+            <li>A recently-checked-in ticket drops out of every flagged/needs-attention view (KPIs, urgency tier, by-assignee, by-reason, Where to Focus) for as long as the note stands &mdash; it's still an open ticket (shows in the main table, status chart, and GAL/Gusto sections with the badge) &mdash; but as soon as anything newer happens (a customer reply, a public reply) it reappears as needing attention.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Refresh</h4>
+          <ul>
+            <li>The page refreshes itself every minute while it's open. Ticket changes show up within a few minutes of happening in Zendesk; the queue is at most about a minute old.</li>
+            <li>The trend chart gets one point per hour on weekdays, plus the history kept by the earlier Watchlist since 8/26.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.0</footer>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ROWS columns: [ticketId, subject, status, requesterName, orgName, assigneeName, hoursSinceActivity, hoursSinceCreated,
+  //                commentCount, lastFrom("agent"/"requester"), flagNoReply, flagAwaiting, flagBackforth, needsAttention, snippet, url, galRef, gustoIncident, ticketType,
+  //                createdBucket("business_hours"/"after_hours"/"weekend"), createdOffHours, checkedInRecently, checkinNote, jiraRefs("GAL-1,ES-2" comma-joined),
+  //                commentsKnown]
+  // Same layout as the Artifact Watchlist, so every section below works unchanged. Built in the browser from the
+  // payroll-watch function's raw ticket fields (see buildRows), and rebuilt on every refresh so hours stay current.
+  var ROWS = [];
+  // HISTORY columns: [timestampMs, openCount, flaggedCount, needsAttnCount, agingCount, staleCount, offHoursCount]
+  var HISTORY = [];
+  // ES_ROWS columns: [key, summary, status, priority, daysOpen(number|null), overdue(0/1),
+  //                   assigneeName, tier, company, url, linkedTicketId(number|null),
+  //                   linkedTicketSubject(string|null), linkedTicketStatus(string|null)]
+  // Open Jira ES tickets tagged component Payroll or "Reports - Payroll" - same criteria as
+  // Jira's own saved filter 40865 - from the shared Jira store, linked to Zendesk through the "ES Number" field.
+  var ES_ROWS = [];
+  var GENERATED_AT = "";
+  var DATA = null;            // last payroll-watch response
+  var REVIEWS = {};           // shared Reviewed/notes, keyed by ticket id or "jira:ES-#####"
+  var VIEWER = null;
+
+  // ---- building rows from the shared stores ----
+  var NOW = Date.now();
+  var NO_REPLY_HOURS = 4, AWAITING_HOURS = 4, BACKFORTH_COMMENTS = 10, CHECKIN_HOURS = 24;
+  // pr_board() tickets: [id, subject, status, requester, org, assignee, created, lastPublicAt, lastPublicByRequester,
+  //   publicComments, agentPublicComments, lastPublicSnippet, lastCommentAt, lastCommentPublic, internalSnippet,
+  //   ticketType, requesterEmail, weekdayPT, hourPT, commentsKnown]
+  function buildRows(tickets) {
+    return tickets.map(function (t) {
+      var created = Date.parse(t[6]), lastPub = t[7] ? Date.parse(t[7]) : null, known = !!t[19];
+      var hours = (NOW - (lastPub || created)) / 3600000, hoursCreated = (NOW - created) / 3600000;
+      var noReply = known && (t[10] || 0) === 0 && hoursCreated >= NO_REPLY_HOURS;
+      var awaiting = known && !!t[8] && lastPub !== null && hours >= AWAITING_HOURS;
+      var backforth = (t[9] || 0) >= BACKFORTH_COMMENTS;
+      var refs = [], seen = {};
+      String(t[1] || "").replace(/GAL-\d+/g, function (m) { if (!seen[m]) { seen[m] = 1; refs.push(m); } return m; });
+      String(t[1] || "").replace(/ES-\d+/g, function (m) { if (!seen[m]) { seen[m] = 1; refs.push(m); } return m; });
+      var gal = (String(t[1] || "").match(/GAL-\d+/) || [null])[0];
+      var gusto = /@gusto\.com$/i.test(String(t[16] || "")) && t[15] === "incident";
+      var bucket = (t[17] === 0 || t[17] === 6) ? "weekend" : (t[18] < 6 || t[18] >= 16 ? "after_hours" : "business_hours");
+      var checkedIn = t[13] === false && t[12] && NOW - Date.parse(t[12]) < CHECKIN_HOURS * 3600000;
+      return [t[0], t[1], t[2], t[3] || "", t[4] || "", t[5] || "Unassigned", hours, hoursCreated,
+        t[9] || 0, t[8] ? "requester" : "agent", noReply, awaiting, backforth, noReply || awaiting, t[11] || "",
+        "https://bqe.zendesk.com/agent/tickets/" + t[0], gal, gusto, t[15], bucket, bucket !== "business_hours",
+        !!checkedIn, checkedIn ? (t[14] || "") : "", refs.join(","), known];
+    });
+  }
+  // pr_board() es: [key, summary, status, priority, created, nextUpdateDue, assignee, company, updated]
+  function buildEsRows(es, links, rows) {
+    var fromSubjects = {};
+    rows.forEach(function (r) {
+      jiraRefsOf(r).forEach(function (ref) { if (ref.indexOf("ES-") === 0 && !fromSubjects[ref]) fromSubjects[ref] = [r[RC.id], r[RC.subject], r[RC.status]]; });
+    });
+    return es.map(function (e) {
+      var link = (links && links[e[0]]) || fromSubjects[e[0]] || null;
+      return [e[0], e[1], e[2], e[3], e[4] ? (NOW - Date.parse(e[4])) / 86400000 : null, e[5] && Date.parse(e[5]) < NOW ? 1 : 0,
+        e[6] || "Unassigned", "", e[7] || "", "https://bqetrack.atlassian.net/browse/" + e[0],
+        link ? link[0] : null, link ? link[1] : null, link ? link[2] : null];
+    });
+  }
+
+  var RC = {
+    id: 0, subject: 1, status: 2, requester: 3, org: 4, assignee: 5,
+    hours: 6, hoursCreated: 7, comments: 8, lastFrom: 9,
+    flagNoReply: 10, flagAwaiting: 11, flagBackforth: 12, needsAttention: 13, snippet: 14, url: 15, gal: 16,
+    gustoIncident: 17, ticketType: 18, createdBucket: 19, createdOffHours: 20, checkedInRecently: 21, checkinNote: 22, jiraRefs: 23,
+    commentsKnown: 24
+  };
+  var ES_RC = {
+    key: 0, summary: 1, status: 2, priority: 3, daysOpen: 4, overdue: 5, assignee: 6, tier: 7,
+    company: 8, url: 9, linkedTicketId: 10, linkedTicketSubject: 11, linkedTicketStatus: 12
+  };
+  var CREATED_BUCKET_LABEL = { business_hours: "Business hours", after_hours: "After-hours (weekday)", weekend: "Weekend" };
+  var CREATED_BUCKET_VAR = { business_hours: "--good", after_hours: "--warning", weekend: "--critical" };
+
+  var STATUS_LABEL = { "new": "New", "open": "Open", "pending": "Pending", "hold": "On Hold" };
+  var STATUS_VAR = { "new": "--ink-3", "open": "--accent", "pending": "--warning", "hold": "--seg-low" };
+
+  function fmtNum(n) { if (n === null || n === undefined || isNaN(n)) return "—"; return Math.round(n).toLocaleString(); }
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtHours(h) {
+    if (h < 48) return Math.round(h) + "h";
+    return Math.round(h / 24) + "d";
+  }
+  function whoLabel(r) {
+    var who = r[RC.requester] || "";
+    var org = r[RC.org] || "";
+    if (who && org) return who + " / " + org;
+    return who || org || "";
+  }
+  var JIRA_BROWSE_URL = "https://bqetrack.atlassian.net/browse/";
+  // Every GAL-##### (Engineering) and ES-##### (Escalations) reference found in the ticket
+  // subject, in order, deduped - a subject can carry more than one (e.g. "GAL-117822 | ES-21457
+  // | ES-22180 | ..."). Just a static browse link, no Jira API call needed - same pattern the
+  // At-Risk dashboard already uses (see at-risk-dashboard-README.md).
+  function jiraRefsOf(r) {
+    var raw = r[RC.jiraRefs];
+    if (!raw) return [];
+    return raw.split(",").filter(function (s) { return s; });
+  }
+  function flagsOf(r) {
+    var f = [];
+    if (r[RC.flagNoReply]) f.push({ key: "noreply", label: "No agent reply", cls: "chip-noreply" });
+    if (r[RC.flagAwaiting]) f.push({ key: "awaiting", label: "Awaiting our reply", cls: "chip-awaiting" });
+    if (r[RC.flagBackforth]) f.push({ key: "backforth", label: r[RC.comments] + " comments", cls: "chip-backforth" });
+    jiraRefsOf(r).forEach(function (ref) {
+      f.push({ key: "jira:" + ref, label: ref, cls: ref.indexOf("ES-") === 0 ? "chip-es" : "chip-gal", href: JIRA_BROWSE_URL + ref });
+    });
+    if (r[RC.createdOffHours]) f.push({ key: "offhours", label: CREATED_BUCKET_LABEL[r[RC.createdBucket]] || "Off-hours", cls: "chip-offhours" });
+    if (!r[RC.commentsKnown]) f.push({ key: "pending", label: "Comments not read yet", cls: "chip-pending" });
+    return f;
+  }
+  function chipsHtml(r) {
+    return flagsOf(r).map(function (f) {
+      return f.href
+        ? '<a class="chip ' + f.cls + '" href="' + f.href + '" target="_blank" rel="noopener">' + escapeHtml(f.label) + '</a>'
+        : '<span class="chip ' + f.cls + '">' + f.label + '</span>';
+    }).join(" ");
+  }
+  function ticketLink(r) { return '<a href="' + r[RC.url] + '" target="_blank" rel="noopener">#' + r[RC.id] + '</a>'; }
+
+  // GAL/Dev-Team tickets and Gusto-incident tickets each get their own dedicated section
+  // (renderGalSection / renderGustoSection) and are excluded from every other breakdown
+  // below - urgency tiers, by-assignee, by-status, by-reason, Where to Focus, and the main
+  // table all work off workingRows/flagged so neither kind shows up twice across sections.
+  // Gusto incidents specifically: Gusto (requester email @gusto.com) opens "incident" type
+  // tickets that don't always get a public reply the way a real customer ticket would -
+  // internal notes/calls often resolve them - so they shouldn't count as a dropped ball.
+  // A ticket checked in today (internal note, no new activity since) stays a real open ticket -
+  // it still counts toward "Open tickets" and still shows in the main table/status chart/GAL
+  // section with a "Recently checked in" badge - but drops out of every flagged/needs-attention
+  // view (KPIs, urgency tier, by-assignee, by-reason, Where to Focus) until something new happens on it.
+  var workingRows = [], flagged = [];
+  function derive() {
+    workingRows = ROWS.filter(function (r) { return !r[RC.gal] && !r[RC.gustoIncident]; });
+    flagged = workingRows.filter(function (r) { return r[RC.needsAttention] && !r[RC.checkedInRecently]; });
+    document.getElementById("scopeOpen").textContent = ROWS.length.toLocaleString();
+    document.getElementById("scopeFlagged").textContent = flagged.length.toLocaleString();
+  }
+
+  // ---- Per-ticket review state (checkbox + note), SHARED: saved through the payroll-watch function
+  // (table pr_reviews), so everyone with access sees the same marks, with who changed them last.
+  // history: [{ note, by, at }, ...] - past review passes, oldest first, added only by a recheck.
+  function getReview(id) {
+    var r = REVIEWS[id];
+    if (!r) return { reviewed: false, note: "", history: [] };
+    return { reviewed: !!r.reviewed, note: r.note || "", updatedAt: r.at ? Date.parse(r.at) : null, by: r.by || "",
+      history: (r.history || []).map(function (h) { return { note: h.note, by: h.by, updatedAt: Date.parse(h.at) }; }) };
+  }
+  var saveTimers = {};
+  function saveReview(id, body, onDone) {
+    BQEBoard.api("payroll-watch", { method: "POST", body: Object.assign({ id: String(id) }, body) }).then(function (j) {
+      REVIEWS[id] = j.review; if (onDone) onDone();
+    }).catch(function (e) { setStatus("Couldn't save (" + e.message + ")", true); });
+  }
+  function setReviewed(id, val) {
+    var r = getReview(id);
+    REVIEWS[id] = { reviewed: val, note: r.note, by: VIEWER && VIEWER.name, at: new Date().toISOString(), history: (REVIEWS[id] || {}).history || [] };
+    saveReview(id, { action: "review", reviewed: val });
+  }
+  // Notes save 0.8 s after typing stops.
+  function setNote(id, text) {
+    var cur = REVIEWS[id] || { reviewed: false, history: [] };
+    REVIEWS[id] = Object.assign({}, cur, { note: text });
+    clearTimeout(saveTimers[id]);
+    saveTimers[id] = setTimeout(function () { saveReview(id, { action: "review", note: text }); }, 800);
+  }
+  // "Recheck": a ticket reviewed on a PRIOR calendar day (see isPriorDay below)
+  // shows an extra checkbox to flag it for a fresh look. Checking it archives the old
+  // reviewed/note pair into history (so the prior context isn't lost) and resets reviewed/note
+  // for today's pass - the ticket goes back to looking unreviewed everywhere it renders.
+  function isPriorDay(ts) {
+    if (!ts) return false;
+    var a = new Date(ts), b = new Date();
+    return a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth() || a.getDate() !== b.getDate();
+  }
+  function fmtReviewDate(ts) {
+    return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function recheckTicket(id) {
+    saveReview(id, { action: "recheck" }, renderAll);
+  }
+  function recheckLabelHtml(id, rv) {
+    if (!(rv.reviewed && isPriorDay(rv.updatedAt))) return "";
+    return '<label class="review-toggle recheck-toggle"><input type="checkbox" data-recheck-id="' + id + '"> Reviewed ' + fmtReviewDate(rv.updatedAt) + ' &mdash; recheck &amp; leave a fresh note?</label>';
+  }
+  function reviewHistoryHtml(rv) {
+    if (!rv.history.length) return "";
+    return '<details class="review-history"><summary>' + rv.history.length + ' earlier note' + (rv.history.length === 1 ? "" : "s") + '</summary>' +
+      rv.history.slice().reverse().map(function (h) {
+        return '<div class="review-history-item"><span class="review-history-date">' + fmtReviewDate(h.updatedAt) + '</span>' + (h.note ? escapeHtml(h.note) : '(no note)') + (h.by ? ' <span class="review-by">&middot; ' + escapeHtml(h.by) + '</span>' : '') + '</div>';
+      }).join("") + '</details>';
+  }
+  function reviewByHtml(rv) {
+    return rv.by && rv.updatedAt ? '<span class="review-by">' + escapeHtml(rv.by) + ' &middot; ' + fmtReviewDate(rv.updatedAt) + '</span>' : '';
+  }
+  function reviewControlsHtml(id, rv) {
+    return '<div class="ticket-item-review">' +
+      '<label class="review-toggle"><input type="checkbox" data-review-id="' + id + '"' + (rv.reviewed ? " checked" : "") + '> Reviewed</label>' +
+      '<input type="text" class="review-note-input" data-note-id="' + id + '" placeholder="Add a note&hellip;" value="' + escapeHtml(rv.note) + '">' +
+      reviewByHtml(rv) + recheckLabelHtml(id, rv) +
+      '</div>' + reviewHistoryHtml(rv);
+  }
+  // Compact variant for the main table's Notes cell, which renders the Reviewed checkbox and
+  // note input directly in their own <td>s rather than via reviewControlsHtml.
+  function tableRecheckHtml(id, rv) {
+    var recheck = recheckLabelHtml(id, rv);
+    return (recheck ? '<div class="table-recheck">' + recheck + '</div>' : "") + reviewHistoryHtml(rv);
+  }
+  // Delegated at the document level (not per-container) so it works everywhere a ticket
+  // renders - table, tier/assignee/status/reason/KPI drilldowns, GAL/Gusto/ES sections -
+  // without wiring a listener in each one. Reviewed/note edits only persist to localStorage
+  // (deliberately no re-render - would blow away focus/cursor position while typing a note);
+  // a recheck click DOES trigger a full re-render since it changes which controls should show.
+  document.addEventListener("change", function (e) {
+    var cb = e.target.closest("[data-review-id]");
+    if (cb) {
+      setReviewed(cb.getAttribute("data-review-id"), cb.checked);
+      var item = cb.closest(".ticket-item"); if (item) item.classList.toggle("reviewed", cb.checked);
+      var row = cb.closest("tr"); if (row) row.classList.toggle("reviewed", cb.checked);
+      return;
+    }
+    var rc = e.target.closest("[data-recheck-id]");
+    if (rc && rc.checked) {
+      recheckTicket(rc.getAttribute("data-recheck-id"));
+      renderAll();
+    }
+  });
+  document.addEventListener("input", function (e) {
+    var note = e.target.closest("[data-note-id]");
+    if (note) setNote(note.getAttribute("data-note-id"), note.value);
+  });
+
+  // ---- Recently-checked-in badge: read-only, reflects a real Zendesk internal note someone
+  // posted directly on the ticket (see buildRows - if the most recent
+  // comment of any kind on a ticket is a private note less than 24h old, it's suppressed
+  // from the flagged/needs-attention views until something new happens). No button, no
+  // write-back from this page - posting the note itself always happens in Zendesk.
+  function checkinControlsHtml(r) {
+    if (!r[RC.checkedInRecently]) return "";
+    return '<div class="checkin-status checkin-status-done">&#10003; Recently checked in' +
+      (r[RC.checkinNote] ? ': "' + escapeHtml(r[RC.checkinNote]) + '"' : '') + '</div>';
+  }
+
+  // ---- Shared ticket-item renderer (used by tier/assignee/status/reason drilldowns) ----
+  function renderTicketItemList(rows, opts) {
+    opts = opts || {};
+    var sorted = rows.slice().sort(function (a, b) { return b[RC.hours] - a[RC.hours]; });
+    if (!sorted.length) return '<div class="panel-empty">No tickets in this selection.</div>';
+    return sorted.map(function (r) {
+      var snippet = r[RC.snippet] ? '<div class="ticket-item-snippet">"' + escapeHtml(r[RC.snippet]) + '"</div>' : "";
+      var rv = getReview(r[RC.id]);
+      return '<div class="ticket-item' + ((rv.reviewed || r[RC.checkedInRecently]) ? " reviewed" : "") + '">' +
+        '<div class="ticket-item-head">' + ticketLink(r) +
+          '<span class="ticket-item-status">' + escapeHtml(STATUS_LABEL[r[RC.status]] || r[RC.status]) + '</span>' +
+          '<span class="flags-cell">' + chipsHtml(r) + '</span>' +
+        '</div>' +
+        '<div class="ticket-item-subject">' + escapeHtml(r[RC.subject] || "(no subject)") + '</div>' +
+        '<div class="ticket-item-meta">' + escapeHtml(whoLabel(r)) + (opts.showAssignee ? ' &middot; assigned to ' + escapeHtml(r[RC.assignee]) : '') + ' &middot; ' + fmtHours(r[RC.hours]) + ' since last activity</div>' +
+        snippet +
+        reviewControlsHtml(r[RC.id], rv) +
+        checkinControlsHtml(r) +
+        '</div>';
+    }).join("");
+  }
+
+  // ---- KPIs ----
+  var KPI_ROW_SETS = {};
+  var activeKpiKey = null;
+
+  function renderKPIs() {
+    var noReply = flagged.filter(function (r) { return r[RC.flagNoReply]; });
+    // Not part of `flagged` (it's not urgent by itself) - pulled from workingRows so it still
+    // counts every long thread, whoever's turn it is to reply. See "Heavy back-and-forth, by
+    // assignee" section for the by-assignee breakdown.
+    var backforth = workingRows.filter(function (r) { return r[RC.flagBackforth]; });
+    var urgent = flagged.filter(function (r) { return r[RC.hours] <= 48; });
+    var aging = flagged.filter(function (r) { return r[RC.hours] > 48 && r[RC.hours] <= 168; });
+    var stale = flagged.filter(function (r) { return r[RC.hours] > 168; });
+    var galRows = ROWS.filter(function (r) { return r[RC.gal]; });
+    var offHoursRows = ROWS.filter(function (r) { return r[RC.createdOffHours]; });
+    var checkedInRows = workingRows.filter(function (r) { return r[RC.checkedInRecently]; });
+
+    KPI_ROW_SETS = { open: ROWS, flagged: flagged, urgent: urgent, aging: aging, stale: stale, noReply: noReply, backforth: backforth, gal: galRows, offHours: offHoursRows, checkedIn: checkedInRows };
+
+    var tiles = [
+      { key: "open", label: "Open tickets", value: fmtNum(ROWS.length), sub: "not yet Solved" },
+      { key: "flagged", label: "Flagged", value: fmtNum(flagged.length), sub: (ROWS.length ? Math.round(flagged.length / ROWS.length * 100) : 0) + "% of open" },
+      { key: "urgent", label: "Needs attention now", value: fmtNum(urgent.length), sub: "≤48h since activity", crit: urgent.length > 0 },
+      { key: "aging", label: "Aging", value: fmtNum(aging.length), sub: "2–7 days" },
+      { key: "stale", label: "Long-stale backlog", value: fmtNum(stale.length), sub: "7+ days" },
+      { key: "noReply", label: "No agent reply yet", value: fmtNum(noReply.length), sub: "never touched" },
+      { key: "backforth", label: "Heavy back-and-forth", value: fmtNum(backforth.length), sub: "10+ comments, not urgent by itself" },
+      { key: "gal", label: "With Dev Team (GAL)", value: fmtNum(galRows.length), sub: (ROWS.length ? Math.round(galRows.length / ROWS.length * 100) : 0) + "% of open" },
+      { key: "offHours", label: "Created Off-Hours", value: fmtNum(offHoursRows.length), sub: (ROWS.length ? Math.round(offHoursRows.length / ROWS.length * 100) : 0) + "% of open (after-hours or weekend)" },
+      { key: "checkedIn", label: "Recently checked in", value: fmtNum(checkedInRows.length), sub: "internal note, last 24h" },
+      // Not part of the generic KPI_ROW_SETS/drilldown mechanism below - ES_ROWS uses a
+      // different column shape (Jira issues, not Zendesk tickets), so this tile scrolls to its
+      // own section instead (same pattern the Escalation dashboard uses for its Avg Resolution
+      // tile, which scrolls to its trend section rather than opening a row drilldown).
+      { key: "esPayroll", label: "ES Escalations (Payroll)", value: fmtNum(ES_ROWS.length), sub: "Jira filter 40865", scrollTo: "esPayrollSection" }
+    ];
+
+    document.getElementById("kpiGrid").innerHTML = tiles.map(function (t) {
+      var active = activeKpiKey === t.key;
+      var attr = t.scrollTo ? 'data-kpi-scroll="' + t.scrollTo + '"' : 'data-kpi-key="' + t.key + '"';
+      return '<button type="button" class="kpi' + (t.crit ? ' critical' : '') + (active ? ' active' : '') + '" ' + attr + '>' +
+        '<div class="kpi-label">' + t.label + '</div>' +
+        '<div class="kpi-value' + (t.crit ? ' crit' : '') + '">' + t.value + '</div>' +
+        '<div class="kpi-sub">' + t.sub + '</div></button>';
+    }).join("");
+
+    renderKpiDrilldown();
+  }
+
+  function renderKpiDrilldown() {
+    var wrap = document.getElementById("kpiDrilldownWrap");
+    var rows = activeKpiKey && KPI_ROW_SETS[activeKpiKey];
+    if (!rows) { wrap.innerHTML = ""; return; }
+    wrap.innerHTML = '<div class="panel kpi-drilldown">' +
+      '<div class="section-head">' +
+        '<h2 class="section-title">' + fmtNum(rows.length) + ' ticket' + (rows.length === 1 ? "" : "s") + '</h2>' +
+        '<button type="button" class="pill-toggle" data-kpi-close="1">Close</button>' +
+      '</div>' +
+      '<div style="margin-top:10px;">' + renderTicketItemList(rows, { showAssignee: true }) + '</div>' +
+      '</div>';
+  }
+
+  document.getElementById("kpiGrid").addEventListener("click", function (e) {
+    var scrollBtn = e.target.closest("[data-kpi-scroll]");
+    if (scrollBtn) {
+      var target = document.getElementById(scrollBtn.getAttribute("data-kpi-scroll"));
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    var btn = e.target.closest("[data-kpi-key]");
+    if (!btn) return;
+    var key = btn.getAttribute("data-kpi-key");
+    activeKpiKey = activeKpiKey === key ? null : key;
+    renderKPIs();
+    if (activeKpiKey) document.getElementById("kpiDrilldownWrap").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  document.getElementById("kpiDrilldownWrap").addEventListener("click", function (e) {
+    if (e.target.closest("[data-kpi-close]")) { activeKpiKey = null; renderKPIs(); }
+  });
+
+  // ---- Generic bar-row chart ----
+  function renderBarChart(elId, items, expandedMap, opts) {
+    opts = opts || {};
+    var el = document.getElementById(elId);
+    if (!items.length) { el.innerHTML = '<div class="empty-state">' + (opts.emptyText || "No flagged tickets right now.") + '</div>'; return; }
+    var total = items.reduce(function (s, it) { return s + it.count; }, 0);
+    var max = Math.max.apply(null, items.map(function (it) { return it.count; }).concat([1]));
+    el.innerHTML = items.map(function (it) {
+      var pct = Math.round((it.count / max) * 100);
+      var share = total ? Math.round((it.count / total) * 100) : 0;
+      var open = !!expandedMap[it.key];
+      var row = '<div class="bar-row clickable" data-bar-key="' + escapeHtml(it.key) + '">' +
+        '<div class="bar-label"><span class="bar-chevron' + (open ? ' open' : '') + '">&#9656;</span>' +
+        '<span class="swatch" style="background:var(' + it.colorVar + ')"></span>' + escapeHtml(it.label) + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; background:var(' + it.colorVar + ')"></div></div>' +
+        '<div class="bar-figs"><b>' + fmtNum(it.count) + '</b> &middot; ' + share + '%</div>' +
+        '</div>';
+      var copyBtn = it.copyable ? '<div class="agent-toolbar"><button type="button" class="copy-btn" data-copy-agent="' + escapeHtml(it.key) + '">Copy list</button></div>' : '';
+      var drill = open ? '<div class="ticket-drilldown">' + copyBtn + renderTicketItemList(it.rows) + '</div>' : '';
+      return row + drill;
+    }).join("");
+  }
+
+  function wireBarChartToggle(elId, expandedMap, renderFn, copyCtx) {
+    document.getElementById(elId).addEventListener("click", function (e) {
+      var copyBtn = e.target.closest("[data-copy-agent]");
+      if (copyBtn && copyCtx) {
+        var key = copyBtn.getAttribute("data-copy-agent");
+        var groups = copyCtx.groups(), names = copyCtx.names();
+        var rows = (groups[key] || []).slice().sort(function (a, b) { return b[RC.hours] - a[RC.hours]; });
+        var text = rows.map(function (r) {
+          return "#" + r[RC.id] + " " + r[RC.url] + "\n  " + (r[RC.subject] || "(no subject)") +
+            "\n  " + whoLabel(r) + " · " + fmtHours(r[RC.hours]) + " since activity · " +
+            flagsOf(r).map(function (f) { return f.label; }).join(", ");
+        }).join("\n\n");
+        var header = copyCtx.header(rows.length, names[key] || key);
+        var full = header + text;
+        function flash(ok) {
+          copyBtn.textContent = ok ? "Copied!" : "Copy failed";
+          copyBtn.classList.toggle("copied", ok);
+          setTimeout(function () { copyBtn.textContent = "Copy list"; copyBtn.classList.remove("copied"); }, 1800);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(full).then(function () { flash(true); }).catch(function () { flash(false); });
+        } else {
+          // Fallback for contexts without the async Clipboard API (older/insecure contexts).
+          try {
+            var ta = document.createElement("textarea");
+            ta.value = full; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            var ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            flash(ok);
+          } catch (err) { flash(false); }
+        }
+        return;
+      }
+      var row = e.target.closest("[data-bar-key]");
+      if (!row) return;
+      var k = row.getAttribute("data-bar-key");
+      expandedMap[k] = !expandedMap[k];
+      renderFn();
+    });
+  }
+
+  // ---- Tier chart ----
+  var expandedTier = {};
+  function renderTierChart() {
+    var urgent = flagged.filter(function (r) { return r[RC.hours] <= 48; });
+    var aging = flagged.filter(function (r) { return r[RC.hours] > 48 && r[RC.hours] <= 168; });
+    var stale = flagged.filter(function (r) { return r[RC.hours] > 168; });
+    var items = [
+      { key: "urgent", label: "Needs attention now", count: urgent.length, rows: urgent, colorVar: "--critical" },
+      { key: "aging", label: "Aging (2-7 days)", count: aging.length, rows: aging, colorVar: "--warning" },
+      { key: "stale", label: "Long-stale backlog (7+ days)", count: stale.length, rows: stale, colorVar: "--ink-3" }
+    ].filter(function (it) { return it.count > 0; });
+    renderBarChart("tierChart", items, expandedTier);
+  }
+
+  // ---- Assignee chart (export per agent) ----
+  var expandedAssignee = {};
+  var agentGroups = {}, agentNames = {};
+  var ASSIGNEE_PALETTE = ["--accent", "--seg-premium", "--seg-low", "--warning", "--good", "--critical", "--ink-3"];
+  function renderAssigneeChart() {
+    agentGroups = {};
+    flagged.forEach(function (r) {
+      var name = r[RC.assignee] || "Unassigned";
+      var key = "a:" + name;
+      agentNames[key] = name;
+      (agentGroups[key] = agentGroups[key] || []).push(r);
+    });
+    var items = Object.keys(agentGroups).map(function (k, i) {
+      return { key: k, label: agentNames[k], count: agentGroups[k].length, rows: agentGroups[k], colorVar: ASSIGNEE_PALETTE[i % ASSIGNEE_PALETTE.length], copyable: true };
+    }).sort(function (a, b) { return b.count - a.count; });
+    renderBarChart("assigneeChart", items, expandedAssignee);
+  }
+
+  // ---- Heavy back-and-forth, by assignee (still worth surfacing by
+  // assignee, but not part of `flagged`/urgent - sourced from workingRows, not flagged) ----
+  var expandedBackforthAssignee = {};
+  var backforthAgentGroups = {}, backforthAgentNames = {};
+  function renderBackforthAssigneeChart() {
+    backforthAgentGroups = {};
+    workingRows.filter(function (r) { return r[RC.flagBackforth]; }).forEach(function (r) {
+      var name = r[RC.assignee] || "Unassigned";
+      var key = "a:" + name;
+      backforthAgentNames[key] = name;
+      (backforthAgentGroups[key] = backforthAgentGroups[key] || []).push(r);
+    });
+    var items = Object.keys(backforthAgentGroups).map(function (k, i) {
+      return { key: k, label: backforthAgentNames[k], count: backforthAgentGroups[k].length, rows: backforthAgentGroups[k], colorVar: ASSIGNEE_PALETTE[i % ASSIGNEE_PALETTE.length], copyable: true };
+    }).sort(function (a, b) { return b.count - a.count; });
+    renderBarChart("backforthAssigneeChart", items, expandedBackforthAssignee, { emptyText: "No heavy back-and-forth tickets right now." });
+  }
+
+  // ---- Status chart ----
+  var expandedStatus = {};
+  function renderStatusChart() {
+    var groups = {};
+    workingRows.forEach(function (r) { (groups[r[RC.status]] = groups[r[RC.status]] || []).push(r); });
+    var items = Object.keys(groups).map(function (s) {
+      return { key: s, label: STATUS_LABEL[s] || s, count: groups[s].length, rows: groups[s], colorVar: STATUS_VAR[s] || "--ink-3" };
+    }).sort(function (a, b) { return b.count - a.count; });
+    renderBarChart("statusChart", items, expandedStatus);
+  }
+
+  // ---- Reason chart ----
+  // Heavy back-and-forth isn't listed here - it no longer makes a ticket "flagged" by itself,
+  // so it can't be one of `flagged`'s reasons. See the standalone "Heavy back-and-forth, by
+  // assignee" section for that signal.
+  var expandedReason = {};
+  function renderReasonChart() {
+    var noReply = flagged.filter(function (r) { return r[RC.flagNoReply]; });
+    var awaiting = flagged.filter(function (r) { return r[RC.flagAwaiting]; });
+    var items = [
+      { key: "noreply", label: "No agent reply yet", count: noReply.length, rows: noReply, colorVar: "--critical" },
+      { key: "awaiting", label: "Awaiting our reply", count: awaiting.length, rows: awaiting, colorVar: "--warning" }
+    ].filter(function (it) { return it.count > 0; });
+    renderBarChart("reasonChart", items, expandedReason);
+  }
+
+  // ---- Created off-hours/weekend chart (all tickets, GAL & Gusto included - this is
+  // an arrival-time metric, independent of the reply-flow flagging system above) ----
+  var expandedOffHours = {};
+  function renderOffHoursChart() {
+    var groups = {};
+    ROWS.forEach(function (r) { (groups[r[RC.createdBucket]] = groups[r[RC.createdBucket]] || []).push(r); });
+    var order = ["business_hours", "after_hours", "weekend"];
+    var items = order.filter(function (b) { return groups[b]; }).map(function (b) {
+      return { key: b, label: CREATED_BUCKET_LABEL[b], count: groups[b].length, rows: groups[b], colorVar: CREATED_BUCKET_VAR[b] };
+    });
+    renderBarChart("offHoursChart", items, expandedOffHours);
+  }
+
+  wireBarChartToggle("tierChart", expandedTier, renderTierChart);
+  wireBarChartToggle("assigneeChart", expandedAssignee, renderAssigneeChart, {
+    groups: function () { return agentGroups; },
+    names: function () { return agentNames; },
+    header: function (n, name) { return "Payroll Watch — " + n + " flagged ticket(s) assigned to " + name + " (" + GENERATED_AT + ")\n\n"; }
+  });
+  wireBarChartToggle("statusChart", expandedStatus, renderStatusChart);
+  wireBarChartToggle("reasonChart", expandedReason, renderReasonChart);
+  wireBarChartToggle("offHoursChart", expandedOffHours, renderOffHoursChart);
+  wireBarChartToggle("backforthAssigneeChart", expandedBackforthAssignee, renderBackforthAssigneeChart, {
+    groups: function () { return backforthAgentGroups; },
+    names: function () { return backforthAgentNames; },
+    header: function (n, name) { return "Payroll Watch — " + n + " heavy back-and-forth ticket(s) assigned to " + name + " (" + GENERATED_AT + ")\n\n"; }
+  });
+
+  // ---- Where to Focus ----
+  var SUGGESTIONS_STORAGE_KEY = "payrollWatchlistDashboard.completedSuggestions.v1";
+  function loadCompletedSuggestions() { try { return JSON.parse(localStorage.getItem(SUGGESTIONS_STORAGE_KEY)) || {}; } catch (e) { return {}; } }
+  function saveCompletedSuggestions() { try { localStorage.setItem(SUGGESTIONS_STORAGE_KEY, JSON.stringify(completedSuggestions)); } catch (e) {} }
+  var completedSuggestions = loadCompletedSuggestions();
+  var suggestionsView = "outstanding";
+
+  function fmtSuggestionDate(ms) { if (!ms) return ""; return new Date(ms).toISOString().split("T")[0]; }
+
+  function buildSuggestionCandidates() {
+    return flagged.map(function (r) {
+      var score = r[RC.hours];
+      if (r[RC.flagNoReply]) score += 200;
+      if (r[RC.flagBackforth]) score += 40;
+      var reasons = flagsOf(r).map(function (f) { return f.label; }).join(", ");
+      return {
+        key: "ticket:" + r[RC.id],
+        score: score,
+        text: '<a href="' + r[RC.url] + '" target="_blank" rel="noopener">#' + r[RC.id] + '</a> <b>' + escapeHtml(r[RC.subject] || "(no subject)") + '</b> — ' +
+          escapeHtml(whoLabel(r)) + ', assigned to ' + escapeHtml(r[RC.assignee]) + ', ' + fmtHours(r[RC.hours]) + ' since activity (' + reasons + ')'
+      };
+    }).sort(function (a, b) { return b.score - a.score; });
+  }
+
+  function renderSuggestions() {
+    var el = document.getElementById("suggestionsPanel");
+    if (suggestionsView === "completed") {
+      var completedList = Object.keys(completedSuggestions).map(function (k) { return completedSuggestions[k]; })
+        .sort(function (a, b) { return b.completedAt - a.completedAt; });
+      document.getElementById("suggestionsCount").textContent = completedList.length.toLocaleString() + " completed";
+      if (!completedList.length) { el.innerHTML = '<div class="panel-empty">Nothing marked completed yet.</div>'; return; }
+      el.innerHTML = completedList.map(function (s) {
+        return '<div class="suggestion-item">' +
+          '<span class="suggestion-check done">&#10003;</span>' +
+          '<div class="suggestion-body"><div class="suggestion-text">' + s.text + '</div>' +
+            '<div class="suggestion-meta">Completed ' + fmtSuggestionDate(s.completedAt) + '</div></div>' +
+          '<button class="suggestion-restore" data-restore-key="' + escapeHtml(s.key) + '">Restore</button>' +
+          '</div>';
+      }).join("");
+    } else {
+      var all = buildSuggestionCandidates().filter(function (c) { return !completedSuggestions[c.key]; }).slice(0, 10);
+      document.getElementById("suggestionsCount").textContent = all.length.toLocaleString() + " outstanding";
+      if (!all.length) { el.innerHTML = '<div class="panel-empty">Nothing outstanding right now.</div>'; return; }
+      el.innerHTML = all.map(function (s) {
+        return '<div class="suggestion-item">' +
+          '<span class="suggestion-check" data-complete-key="' + escapeHtml(s.key) + '" data-complete-text="' + escapeHtml(s.text) + '"></span>' +
+          '<div class="suggestion-body"><div class="suggestion-text">' + s.text + '</div></div>' +
+          '</div>';
+      }).join("");
+    }
+  }
+
+  document.getElementById("suggestionsViewToggle").addEventListener("click", function () {
+    suggestionsView = suggestionsView === "outstanding" ? "completed" : "outstanding";
+    this.setAttribute("aria-pressed", String(suggestionsView === "completed"));
+    this.textContent = suggestionsView === "completed" ? "Show outstanding" : "Show completed";
+    renderSuggestions();
+  });
+  document.getElementById("suggestionsPanel").addEventListener("click", function (e) {
+    var check = e.target.closest("[data-complete-key]");
+    if (check) {
+      var key = check.getAttribute("data-complete-key");
+      completedSuggestions[key] = { key: key, text: check.getAttribute("data-complete-text"), completedAt: Date.now() };
+      saveCompletedSuggestions();
+      renderSuggestions();
+      return;
+    }
+    var restore = e.target.closest("[data-restore-key]");
+    if (restore) {
+      delete completedSuggestions[restore.getAttribute("data-restore-key")];
+      saveCompletedSuggestions();
+      renderSuggestions();
+    }
+  });
+
+  // ---- Main ticket table ----
+  var tableState = { filter: "all", search: "", sortKey: "hours", sortDir: "desc", page: 1, pageSize: 20 };
+
+  function tableRows() {
+    var rows = workingRows;
+    if (tableState.filter === "flagged") rows = rows.filter(function (r) { return r[RC.needsAttention] && !r[RC.checkedInRecently]; });
+    else if (tableState.filter === "noreply") rows = rows.filter(function (r) { return r[RC.flagNoReply]; });
+    else if (tableState.filter === "awaiting") rows = rows.filter(function (r) { return r[RC.flagAwaiting]; });
+    else if (tableState.filter === "backforth") rows = rows.filter(function (r) { return r[RC.flagBackforth]; });
+    if (tableState.search) {
+      var q = tableState.search.toLowerCase();
+      rows = rows.filter(function (r) {
+        return (r[RC.subject] || "").toLowerCase().indexOf(q) !== -1 || (r[RC.requester] || "").toLowerCase().indexOf(q) !== -1 || (r[RC.org] || "").toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    var key = tableState.sortKey, dir = tableState.sortDir === "asc" ? 1 : -1;
+    var sortFns = {
+      id: function (r) { return r[RC.id]; },
+      subject: function (r) { return (r[RC.subject] || "").toLowerCase(); },
+      requester: function (r) { return whoLabel(r).toLowerCase(); },
+      assignee: function (r) { return (r[RC.assignee] || "").toLowerCase(); },
+      status: function (r) { return r[RC.status]; },
+      hours: function (r) { return r[RC.hours]; },
+      comments: function (r) { return r[RC.comments]; },
+      flags: function (r) { return flagsOf(r).length; },
+      reviewed: function (r) { return getReview(r[RC.id]).reviewed ? 1 : 0; }
+    };
+    var fn = sortFns[key] || sortFns.hours;
+    rows = rows.slice().sort(function (a, b) { var av = fn(a), bv = fn(b); return av < bv ? -1 * dir : av > bv ? 1 * dir : 0; });
+    return rows;
+  }
+
+  function renderTable() {
+    var rows = tableRows();
+    var totalPages = Math.max(1, Math.ceil(rows.length / tableState.pageSize));
+    if (tableState.page > totalPages) tableState.page = totalPages;
+    var start = (tableState.page - 1) * tableState.pageSize;
+    var pageRows = rows.slice(start, start + tableState.pageSize);
+
+    var tbody = document.getElementById("ticketTableBody");
+    if (!pageRows.length) {
+      tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state">No tickets match this filter.</div></td></tr>';
+    } else {
+      tbody.innerHTML = pageRows.map(function (r) {
+        var rv = getReview(r[RC.id]);
+        return '<tr' + ((rv.reviewed || r[RC.checkedInRecently]) ? ' class="reviewed"' : "") + '>' +
+          '<td>' + ticketLink(r) + '</td>' +
+          '<td class="subject-cell">' + escapeHtml(r[RC.subject] || "(no subject)") + '</td>' +
+          '<td>' + escapeHtml(whoLabel(r)) + '</td>' +
+          '<td>' + escapeHtml(r[RC.assignee]) + '</td>' +
+          '<td>' + escapeHtml(STATUS_LABEL[r[RC.status]] || r[RC.status]) + '</td>' +
+          '<td>' + fmtHours(r[RC.hours]) + '</td>' +
+          '<td>' + fmtNum(r[RC.comments]) + '</td>' +
+          '<td class="flags-cell">' + (chipsHtml(r) || '&mdash;') + '</td>' +
+          '<td><input type="checkbox" data-review-id="' + r[RC.id] + '"' + (rv.reviewed ? " checked" : "") + '></td>' +
+          '<td><input type="text" class="table-note-input" data-note-id="' + r[RC.id] + '" placeholder="Note&hellip;" value="' + escapeHtml(rv.note) + '">' + reviewByHtml(rv) + tableRecheckHtml(r[RC.id], rv) + '</td>' +
+          '<td>' + checkinControlsHtml(r) + '</td>' +
+          '</tr>';
+      }).join("");
+    }
+
+    document.querySelectorAll("#ticketTable thead th").forEach(function (th) {
+      th.classList.toggle("sorted", th.getAttribute("data-key") === tableState.sortKey);
+      var arrow = th.querySelector(".arrow");
+      if (!arrow) return;
+      if (th.getAttribute("data-key") === tableState.sortKey) arrow.textContent = tableState.sortDir === "asc" ? "▲" : "▼";
+      else arrow.textContent = "▾";
+    });
+
+    var pager = document.getElementById("ticketPager");
+    if (rows.length <= tableState.pageSize) { pager.innerHTML = ""; }
+    else {
+      pager.innerHTML =
+        '<button type="button" data-page="prev"' + (tableState.page <= 1 ? " disabled" : "") + '>Prev</button>' +
+        '<span>Showing ' + (start + 1) + '-' + Math.min(start + tableState.pageSize, rows.length) + ' of ' + rows.length + '</span>' +
+        '<button type="button" data-page="next"' + (tableState.page >= totalPages ? " disabled" : "") + '>Next</button>';
+    }
+  }
+
+  document.querySelectorAll('[data-table-filter]').forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll('[data-table-filter]').forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+      btn.setAttribute("aria-pressed", "true");
+      tableState.filter = btn.getAttribute("data-table-filter");
+      tableState.page = 1;
+      renderTable();
+    });
+  });
+  document.getElementById("tableSearch").addEventListener("input", function () {
+    tableState.search = this.value;
+    tableState.page = 1;
+    renderTable();
+  });
+  document.querySelectorAll("#ticketTable thead th").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var key = th.getAttribute("data-key");
+      if (!key) return;
+      if (tableState.sortKey === key) tableState.sortDir = tableState.sortDir === "asc" ? "desc" : "asc";
+      else { tableState.sortKey = key; tableState.sortDir = key === "subject" || key === "requester" || key === "assignee" ? "asc" : "desc"; }
+      renderTable();
+    });
+  });
+  document.getElementById("ticketPager").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-page]");
+    if (!btn) return;
+    if (btn.getAttribute("data-page") === "prev") tableState.page--; else tableState.page++;
+    renderTable();
+  });
+
+  // ---- Trend chart ----
+  function renderTrendChart() {
+    var el = document.getElementById("trendChart");
+    if (HISTORY.length < 2) {
+      el.innerHTML = '<div class="empty-state">Trend builds up over time — check back after a few more poll runs.</div>';
+      document.getElementById("trendLegend").innerHTML = "";
+      return;
+    }
+    var SERIES = [
+      { idx: 1, label: "Open", colorVar: "--ink-3" },
+      { idx: 2, label: "Flagged", colorVar: "--critical" },
+      { idx: 6, label: "Off-hours/weekend", colorVar: "--warning" }
+    ];
+    document.getElementById("trendLegend").innerHTML = SERIES.map(function (s) {
+      return '<span><span class="dot" style="background:var(' + s.colorVar + ')"></span>' + s.label + '</span>';
+    }).join("");
+
+    var W = 1080, H = 260, padL = 40, padR = 16, padT = 14, padB = 30;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var n = HISTORY.length;
+    var xStep = n > 1 ? plotW / (n - 1) : 0;
+    var maxVal = 0;
+    HISTORY.forEach(function (row) { maxVal = Math.max(maxVal, row[1], row[2], row[6] || 0); });
+    maxVal = Math.ceil((maxVal * 1.15) / 5) * 5 || 5;
+
+    function x(i) { return padL + i * xStep; }
+    function y(v) { return padT + plotH - (v / maxVal) * plotH; }
+
+    var gridN = 4, gridLines = "", gridLabels = "";
+    for (var g = 0; g <= gridN; g++) {
+      var val = Math.round((maxVal / gridN) * g);
+      var gy = y(val);
+      gridLines += '<line class="trend-gridline" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" />';
+      gridLabels += '<text class="trend-axis-label" x="' + (padL - 8) + '" y="' + (gy + 3) + '" text-anchor="end">' + val + '</text>';
+    }
+    var labelEvery = Math.max(1, Math.ceil(n / 8));
+    var xLabels = "";
+    HISTORY.forEach(function (row, i) {
+      if (i % labelEvery !== 0 && i !== n - 1) return;
+      var d = new Date(row[0]);
+      xLabels += '<text class="trend-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + (d.getMonth() + 1) + '/' + d.getDate() + '</text>';
+    });
+
+    var paths = SERIES.map(function (s) {
+      var d = HISTORY.map(function (row, i) { return (i === 0 ? "M" : "L") + x(i) + "," + y(row[s.idx]); }).join(" ");
+      return '<path d="' + d + '" fill="none" stroke="var(' + s.colorVar + ')" stroke-width="2" />';
+    });
+
+    el.innerHTML = '<svg class="trend-svg" viewBox="0 0 ' + W + ' ' + H + '">' + gridLines + paths.join("") + gridLabels + xLabels + '</svg>';
+    document.getElementById("trendNote").textContent = n + " poll runs of history";
+  }
+
+  // ---- GAL / Dev Team section ----
+  // Anything referencing a GAL-##### Jira ticket is escalated to Engineering -
+  // it's blocked on Dev, not necessarily support dropping the ball, so it gets
+  // its own section rather than being folded into the urgency/assignee views.
+  function renderGalSection() {
+    var galRows = ROWS.filter(function (r) { return r[RC.gal]; });
+    document.getElementById("galNote").textContent = fmtNum(galRows.length) + " of " + fmtNum(ROWS.length) + " open tickets reference a GAL Jira ticket";
+    document.getElementById("galList").innerHTML = renderTicketItemList(galRows, { showAssignee: true });
+  }
+
+  // ---- Gusto Incidents section ----
+  // Gusto (requester email @gusto.com) opens "incident" type tickets that don't always
+  // get a public reply the way a real customer ticket would - often resolved via internal
+  // notes or a call - so they get their own section instead of tripping the reply-based flags.
+  function renderGustoSection() {
+    var gustoRows = ROWS.filter(function (r) { return r[RC.gustoIncident]; });
+    document.getElementById("gustoNote").textContent = fmtNum(gustoRows.length) + " of " + fmtNum(ROWS.length) + " open tickets are Gusto-opened incidents";
+    document.getElementById("gustoList").innerHTML = renderTicketItemList(gustoRows, { showAssignee: true });
+  }
+
+  // ---- ES Escalations (Payroll) section ----
+  // Open Jira ES tickets tagged component Payroll or "Reports - Payroll" - matches Jira's own
+  // saved filter 40865 exactly (project = ES AND status != Closed AND component IN (Payroll,
+  // "Reports - Payroll")), reusing escalation_open_enriched.csv the Escalation Bottleneck
+  // dashboard's own pipeline already refreshes daily - no separate pull for this section. Each
+  // ticket cross-references this dashboard's own jiraRefs field: a match shows which open
+  // Payroll ticket it was escalated from, no match means either the Zendesk ticket that
+  // originated it has since been solved, or the ES ticket was never linked via an ES-#####
+  // reference in a subject line. Independent of the GAL/Gusto exclusion rules above - this is
+  // its own population, not a slice of ROWS/workingRows.
+  function renderEsPayrollSection() {
+    document.getElementById("esPayrollNote").textContent =
+      fmtNum(ES_ROWS.length) + " open ES " + (ES_ROWS.length === 1 ? "ticket" : "tickets") + " tagged component Payroll (matches Jira filter 40865)";
+    var listEl = document.getElementById("esPayrollList");
+    if (!ES_ROWS.length) { listEl.innerHTML = '<div class="panel-empty">No open ES escalations tagged Payroll right now.</div>'; return; }
+    var sorted = ES_ROWS.slice().sort(function (a, b) { return (b[ES_RC.daysOpen] || 0) - (a[ES_RC.daysOpen] || 0); });
+    listEl.innerHTML = sorted.map(function (r) {
+      var id = "jira:" + r[ES_RC.key];
+      var rv = getReview(id);
+      var linkedHtml = r[ES_RC.linkedTicketId]
+        ? 'Linked from <a href="https://bqe.zendesk.com/agent/tickets/' + r[ES_RC.linkedTicketId] + '" target="_blank" rel="noopener">Zendesk #' + r[ES_RC.linkedTicketId] + '</a> (' + escapeHtml(STATUS_LABEL[r[ES_RC.linkedTicketStatus]] || r[ES_RC.linkedTicketStatus] || "") + ')'
+        : 'No linked open Payroll ticket found';
+      return '<div class="ticket-item' + (rv.reviewed ? " reviewed" : "") + '">' +
+        '<div class="ticket-item-head">' +
+          '<a href="' + r[ES_RC.url] + '" target="_blank" rel="noopener">' + escapeHtml(r[ES_RC.key]) + '</a>' +
+          '<span class="ticket-item-status">' + escapeHtml(r[ES_RC.status]) + '</span>' +
+          '<span class="flags-cell"><span class="chip chip-es">' + escapeHtml(r[ES_RC.priority] || "") + '</span>' + (r[ES_RC.overdue] ? ' <span class="chip chip-awaiting">Overdue</span>' : '') + '</span>' +
+        '</div>' +
+        '<div class="ticket-item-subject">' + escapeHtml(r[ES_RC.summary] || "(no summary)") + '</div>' +
+        '<div class="ticket-item-meta">' + (r[ES_RC.company] ? escapeHtml(r[ES_RC.company]) : "&mdash;") + ' &middot; ' + escapeHtml(r[ES_RC.assignee]) + (r[ES_RC.tier] ? ' (' + escapeHtml(r[ES_RC.tier]) + ')' : '') + ' &middot; ' + fmtNum(r[ES_RC.daysOpen]) + 'd open</div>' +
+        '<div class="ticket-item-meta">' + linkedHtml + '</div>' +
+        reviewControlsHtml(id, rv) +
+        '</div>';
+    }).join("");
+  }
+
+  // ---- Wiring ----
+  // Wrapped in a function (not a bare top-to-bottom script) so a "recheck" click can trigger a
+  // full, correct re-render of every section a ticket might appear in without hand-picking
+  // which ones to refresh - see the [data-recheck-id] change handler above.
+  function renderAll() {
+    derive();
+    renderKPIs();
+    renderTierChart();
+    renderAssigneeChart();
+    renderBackforthAssigneeChart();
+    renderEsPayrollSection();
+    renderGalSection();
+    renderGustoSection();
+    renderStatusChart();
+    renderReasonChart();
+    renderOffHoursChart();
+    renderSuggestions();
+    renderTable();
+    renderTrendChart();
+  }
+
+  // =====================================================================================
+  // Hosted board: live queue, calls, sign-in, refresh
+  // =====================================================================================
+  var TZ = "America/Los_Angeles";
+  var WAIT_FLASH_SEC = 5 * 60;          // longest wait at or past this flashes red (same as the RingCX Live View)
+  var STALE_QUEUE_SEC = 3 * 60;         // queue snapshot older than this = say so
+  var REFRESH_MS = 60 * 1000;
+  var fetchedAt = 0;
+  var ptFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+  var ptDayFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short", month: "numeric", day: "numeric" });
+  var ptParts = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", weekday: "short", hour: "2-digit", minute: "2-digit" });
+  function fmtClock(ms) { return ptFmt.format(new Date(ms)) + " PT"; }
+  function partsPT(ms) {
+    var o = {}; ptParts.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });
+    return { wd: o.weekday, h: +o.hour, m: +o.minute };
+  }
+  // Payroll Specialist queue hours: M-F 6am-4pm Pacific (RingCX gate schedule "06001600").
+  function inPayrollHours(ms) { var p = partsPT(ms); return p.wd !== "Sat" && p.wd !== "Sun" && p.h >= 6 && p.h < 16; }
+  function fmtDur(sec) {
+    sec = Math.max(0, Math.round(sec || 0));
+    if (sec < 3600) return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+    return Math.floor(sec / 3600) + "h " + String(Math.floor((sec % 3600) / 60)).padStart(2, "0") + "m";
+  }
+  function setStatus(msg, bad) {
+    document.getElementById("genDate").textContent = msg;
+    document.getElementById("liveDot").className = "snapshot-dot " + (bad ? "stale" : "live");
+  }
+  function sinceFetch() { return fetchedAt ? (Date.now() - fetchedAt) / 1000 : 0; }
+
+  // ---- queue ----
+  function queueAgeSec() { return DATA && DATA.queue && DATA.queue.ts ? (Date.now() - Date.parse(DATA.queue.ts)) / 1000 : null; }
+  function renderQueue() {
+    var Q = DATA && DATA.queue && DATA.queue.q, age = queueAgeSec();
+    var st = document.getElementById("queueStatus"), tiles = document.getElementById("queueTiles");
+    if (!Q) { st.className = "q-status q-closed"; st.textContent = "No queue data"; tiles.innerHTML = ""; return; }
+    var open = String(Q.state).toLowerCase() === "open", waiting = +Q.inQueue || 0, avail = +Q.available || 0;
+    if (!open) { st.className = "q-status q-closed"; st.textContent = "Closed"; }
+    else if (!avail && waiting) { st.className = "q-status q-crit"; st.textContent = "Open · callers waiting, nobody available"; }
+    else if (!avail) { st.className = "q-status q-warn"; st.textContent = "Open · nobody available"; }
+    else { st.className = "q-status q-open"; st.textContent = "Open"; }
+    var longest = (+Q.longestInQueue || 0) + (waiting ? age : 0);
+    var pass = +Q.slaPass || 0, fail = +Q.slaFail || 0;
+    var t = [
+      { label: "Waiting now", value: fmtNum(waiting), sub: waiting ? "in the queue" : "nobody waiting", crit: waiting > 0 && !avail },
+      { label: "Longest wait", value: waiting ? fmtDur(longest) : "—", sub: "flashes at 5 min", flash: waiting > 0 && longest >= WAIT_FLASH_SEC },
+      { label: "Available", value: fmtNum(avail), sub: fmtNum(+Q.staffed || 0) + " logged in to this queue", crit: open && !avail },
+      { label: "Answered today", value: fmtNum(+Q.accepted || 0), sub: fmtNum(+Q.presented || 0) + " presented" },
+      { label: "Abandoned today", value: fmtNum(+Q.abandoned || 0), sub: "hung up before an answer", crit: (+Q.abandoned || 0) > 0 },
+      { label: "SLA today", value: pass + fail ? Math.round(pass / (pass + fail) * 100) + "%" : "—", sub: "answered within 30 s" }
+    ];
+    tiles.innerHTML = t.map(function (x) {
+      return '<div class="q-tile' + (x.flash ? " flash" : "") + '"><div class="kpi-label">' + x.label + '</div>' +
+        '<div class="kpi-value' + (x.crit || x.flash ? " crit" : "") + '">' + x.value + '</div><div class="kpi-sub">' + x.sub + '</div></div>';
+    }).join("");
+    var note = "RingCX snapshot " + fmtClock(Date.parse(DATA.queue.ts));
+    if (age !== null && age > STALE_QUEUE_SEC) note += " · " + Math.round(age / 60) + " min old";
+    document.getElementById("queueNote").textContent = note;
+    document.getElementById("queueNote").style.color = age !== null && age > STALE_QUEUE_SEC ? "var(--critical)" : "";
+    renderSpark();
+  }
+  // Today, 6am-4pm Pacific (wider if there's data outside it): callers waiting and agents available per minute.
+  function renderSpark() {
+    var svg = document.getElementById("queueSpark"), s = (DATA && DATA.queue_series) || [];
+    if (!s.length) { svg.innerHTML = ""; document.getElementById("sparkRange").textContent = ""; return; }
+    var t0 = Date.parse(s[0][0]), t1 = Date.parse(s[s.length - 1][0]);
+    var p0 = partsPT(t0), dayStart = t0 - ((p0.h * 60 + p0.m) * 60000);
+    var x0 = Math.min(t0, dayStart + 6 * 3600000), x1 = Math.max(t1, dayStart + 16 * 3600000);
+    var max = 1; s.forEach(function (r) { max = Math.max(max, r[1] || 0, r[2] || 0); });
+    function X(ms) { return ((ms - x0) / (x1 - x0)) * 600; }
+    function Y(v) { return 66 - (v / max) * 60; }
+    function line(i, color) {
+      return '<path fill="none" stroke="' + color + '" stroke-width="2" vector-effect="non-scaling-stroke" d="' +
+        s.map(function (r, k) { return (k ? "L" : "M") + X(Date.parse(r[0])).toFixed(1) + "," + Y(r[i] || 0).toFixed(1); }).join("") + '"/>';
+    }
+    svg.innerHTML = '<line x1="0" y1="66" x2="600" y2="66" stroke="var(--border)" vector-effect="non-scaling-stroke"/>' +
+      line(2, "var(--good)") + line(1, "var(--critical)");
+    document.getElementById("sparkRange").textContent = fmtClock(x0) + " – " + fmtClock(x1) + " · peak " + max;
+  }
+
+  // ---- agents on Payroll ----
+  // pr_board() agents: [agentId, firstName, lastName, agentType, agentState, agentBaseState, stateTime, gateId, callUii, isMember]
+  function agentColor(a) {
+    var b = String(a[5] || "").toUpperCase();
+    if (a[8] || b === "ENGAGED" || b === "TRANSITION") return "st-red";
+    if (b === "AVAILABLE") return "st-green";
+    if (b === "ON-BREAK" || b === "BREAK" || b === "AWAY" || b === "LUNCH") return "st-grey";
+    return "st-yellow";
+  }
+  function agentLabel(a) {
+    var b = String(a[5] || "").toUpperCase();
+    if (b === "TRANSITION" && !a[8]) return "Transition";
+    return a[4] || b || "?";
+  }
+  var COLOR_ORDER = { "st-red": 0, "st-green": 1, "st-yellow": 2, "st-grey": 3 };
+  function renderAgents() {
+    var el = document.getElementById("queueAgents");
+    var rows = ((DATA && DATA.agents) || []).slice(), names = (DATA && DATA.names) || {};
+    var seen = {}; rows.forEach(function (a) { seen[String(a[0])] = 1; });
+    var age = queueAgeSec() || 0;
+    rows.sort(function (a, b) {
+      var pa = String(a[7]) === "793547" && a[8] ? -1 : 0, pb = String(b[7]) === "793547" && b[8] ? -1 : 0;
+      return (pa - pb) || (COLOR_ORDER[agentColor(a)] - COLOR_ORDER[agentColor(b)]) || String(a[1]).localeCompare(String(b[1]));
+    });
+    var html = rows.map(function (a) {
+      var onPayroll = String(a[7]) === "793547" && a[8];
+      var name = ((a[1] || "") + " " + (a[2] || "")).trim();
+      return '<div class="agent-row"><span class="agent-name">' + escapeHtml(name) + (a[9] ? "" : ' <span class="review-by">not assigned to Payroll</span>') + '</span>' +
+        '<span class="st ' + agentColor(a) + '">' + escapeHtml(onPayroll ? "On a Payroll call" : agentLabel(a)) + '</span>' +
+        '<span class="agent-time">' + fmtDur((+a[6] || 0) + age) + '</span></div>';
+    });
+    // Logged-out members: only those seen today or on a Payroll call in the last 30 days (names come from there);
+    // anyone else assigned to the queue but never on it is just counted.
+    var out = ((DATA && DATA.members) || []).filter(function (id) { return !seen[id]; });
+    var quiet = 0;
+    out.forEach(function (id) {
+      if (!names[id]) { quiet++; return; }
+      html.push('<div class="agent-row"><span class="agent-name">' + escapeHtml(names[id]) + '</span>' +
+        '<span class="st st-grey">Logged out</span><span class="agent-time"></span></div>');
+    });
+    if (quiet) html.push('<div class="agent-row"><span class="agent-name review-by">+' + quiet + ' more assigned to the queue, not on it recently</span><span></span><span></span></div>');
+    el.innerHTML = html.length ? html.join("") : '<div class="panel-empty">Nobody is assigned to the Payroll queue.</div>';
+    var avail = rows.filter(function (a) { return agentColor(a) === "st-green"; }).length;
+    document.getElementById("agentsNote").textContent = rows.length + " logged in · " + avail + " available";
+  }
+
+  // ---- calls, last 30 days ----
+  // pr_board() calls: [startUtc, agent ("Last, First"), callResult, abandoned, queueSec, talkSec, uii, termParty, hasRecording]
+  function personName(s) { var p = String(s || "").split(","); return p.length === 2 ? (p[1].trim() + " " + p[0].trim()) : String(s || ""); }
+  function median(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }); var m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+  function renderCalls() {
+    var c = (DATA && DATA.calls) || [];
+    var missed = c.filter(function (r) { return r[3]; });
+    var answered = c.filter(function (r) { return !r[3] && r[2] === "CONNECTED"; });
+    var missedStaffed = missed.filter(function (r) { return inPayrollHours(Date.parse(r[0])); });
+    var waits = answered.map(function (r) { return +r[4] || 0; });
+    var k = [
+      { label: "Calls", value: fmtNum(c.length), sub: "last 30 days" },
+      { label: "Answered", value: fmtNum(answered.length), sub: c.length ? Math.round(answered.length / c.length * 100) + "% of calls" : "" },
+      { label: "Missed", value: fmtNum(missed.length), sub: c.length ? Math.round(missed.length / c.length * 100) + "% miss rate" : "", crit: missed.length > 0 },
+      { label: "Missed in staffed hours", value: fmtNum(missedStaffed.length), sub: "M–F 6am–4pm PT", crit: missedStaffed.length > 0 },
+      { label: "Median answer time", value: waits.length ? fmtDur(median(waits)) : "—", sub: waits.length ? "slowest " + fmtDur(Math.max.apply(null, waits)) : "" }
+    ];
+    document.getElementById("callsKpis").innerHTML = k.map(function (x) {
+      return '<div class="q-tile"><div class="kpi-label">' + x.label + '</div><div class="kpi-value' + (x.crit ? " crit" : "") + '">' + x.value + '</div><div class="kpi-sub">' + x.sub + '</div></div>';
+    }).join("");
+    document.getElementById("callsMissed").innerHTML = missed.length ? missed.slice(0, 15).map(function (r) {
+      var t = Date.parse(r[0]);
+      return '<div class="row"><span>' + escapeHtml(ptDayFmt.format(new Date(t)) + " " + fmtClock(t)) + (inPayrollHours(t) ? "" : ' <span class="muted">(outside hours)</span>') + '</span>' +
+        '<span class="muted">waited ' + fmtDur(r[4]) + ' &middot; <a href="https://bqe.zendesk.com/agent/search/1?type=ticket&q=' + encodeURIComponent(r[6]) + '" target="_blank" rel="noopener">Ticket &#8599;</a></span></div>';
+    }).join("") + (missed.length > 15 ? '<div class="row muted">+' + (missed.length - 15) + ' more</div>' : "") : '<div class="panel-empty">No missed calls in the last 30 days.</div>';
+    var who = {};
+    answered.forEach(function (r) { var n = personName(r[1]) || "Unknown"; who[n] = (who[n] || 0) + 1; });
+    var whoList = Object.keys(who).sort(function (a, b) { return who[b] - who[a]; });
+    document.getElementById("callsWho").innerHTML = whoList.length ? whoList.map(function (n) {
+      return '<div class="row"><span>' + escapeHtml(n) + '</span><span class="muted">' + who[n] + ' call' + (who[n] === 1 ? "" : "s") + '</span></div>';
+    }).join("") : '<div class="panel-empty">No answered calls.</div>';
+    var synced = DATA && DATA.sync && DATA.sync.calls;
+    document.getElementById("callsNote").textContent = "From RingCX's call report" + (synced ? ", updated " + ptDayFmt.format(new Date(synced)) + " " + fmtClock(Date.parse(synced)) : "") +
+      " · today's calls are in the live counts above";
+  }
+
+  // ---- load and refresh ----
+  var renderPending = false;
+  function typing() { var a = document.activeElement; return !!(a && a.closest && a.closest("#board") && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type === "text"); }
+  function apply() {
+    NOW = Date.now();
+    ROWS = buildRows(DATA.tickets || []);
+    HISTORY = (DATA.history || []).map(function (h) { return [Date.parse(h[0]), h[1], h[2], h[3], h[4], h[5], h[6] == null ? null : h[6]]; });
+    ES_ROWS = buildEsRows(DATA.es || [], DATA.es_links || {}, ROWS);
+    GENERATED_AT = fmtClock(fetchedAt);
+    // Don't redraw the ticket sections while someone is typing a note (it would drop their cursor).
+    if (typing()) renderPending = true; else { renderPending = false; renderAll(); }
+    renderQueue(); renderAgents(); renderCalls();
+    var s = DATA.sync || {}, zdAge = s.zd ? (Date.now() - Date.parse(s.zd)) / 60000 : null;
+    setStatus("Updated " + fmtClock(fetchedAt) + (s.zd ? " · tickets synced " + fmtClock(Date.parse(s.zd)) : "") +
+      (s.jira ? " · ES synced " + fmtClock(Date.parse(s.jira)) : "") + " · refreshes every minute", zdAge !== null && zdAge > 15);
+  }
+  document.addEventListener("focusout", function () { setTimeout(function () { if (renderPending && !typing()) { renderPending = false; renderAll(); } }, 0); });
+  var loading = false;
+  function load() {
+    if (loading) return; loading = true;
+    BQEBoard.api("payroll-watch").then(function (j) {
+      fetchedAt = Date.now(); DATA = j; VIEWER = j.viewer; REVIEWS = j.reviews || {};
+      apply();
+    }).catch(function (e) {
+      setStatus("Couldn't refresh (" + e.message + "). Showing the last data.", true);
+    }).then(function () { loading = false; });
+  }
+  // Timers (longest wait, time in status) tick between refreshes.
+  setInterval(function () { if (DATA) { renderQueue(); renderAgents(); } }, 5000);
+
+  // ---- theme ----
+  var THEME_KEY = "bqeBoards.theme";
+  function applyTheme(t) { if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme"); }
+  try { applyTheme(localStorage.getItem(THEME_KEY)); } catch (e) {}
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var t = cur === "dark" ? "light" : "dark";
+    applyTheme(t); try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
+  });
+
+  // ---- sign-in, who's viewing ----
+  var refreshTimer = null;
+  function showSignin(msg) {
+    clearInterval(refreshTimer); refreshTimer = null;
+    document.getElementById("board").hidden = true;
+    document.getElementById("topbar").hidden = true;
+    document.getElementById("signin").hidden = false;
+    document.getElementById("signinMsg").textContent = msg || "";
+  }
+  function renderViewers(people) {
+    document.getElementById("viewers").innerHTML = people.map(function (p) {
+      return '<span class="viewer-dot' + (p.me ? " me" : "") + '" title="' + escapeHtml(p.name + (p.me ? " (you)" : "")) + '">' + escapeHtml(p.initials) + '</span>';
+    }).join("");
+  }
+  document.getElementById("signInBtn").addEventListener("click", function () {
+    document.getElementById("signinMsg").textContent = "";
+    BQEBoard.signIn().catch(function (e) { showSignin(e.message); });
+  });
+  document.getElementById("signOutBtn").addEventListener("click", function () { BQEBoard.signOut(); });
+  BQEBoard.start({
+    board: "payroll-watch",
+    onSignIn: showSignin,
+    onReady: function (v) {
+      VIEWER = v;
+      document.getElementById("signin").hidden = true;
+      document.getElementById("board").hidden = false;
+      document.getElementById("topbar").hidden = false;
+      document.getElementById("viewerName").innerHTML = "Viewing: <b>" + escapeHtml(v.name) + "</b>";
+      BQEBoard.presence(renderViewers);
+      load();
+      if (!refreshTimer) refreshTimer = setInterval(load, REFRESH_MS);
+    }
+  });
+
+  // ---- pick up a newly published version of this page (checked every 5 min, never while typing) ----
+  var pageHash = null;
+  function hashText(s) { return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)).then(function (b) { return Array.from(new Uint8Array(b)).join(","); }); }
+  function checkVersion() {
+    if (!window.crypto || !crypto.subtle || location.protocol === "file:") return;
+    fetch(location.pathname, { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : null; }).then(function (t) {
+      if (!t) return;
+      return hashText(t).then(function (h) { if (pageHash === null) pageHash = h; else if (h !== pageHash && !typing()) location.reload(); });
+    }).catch(function () {});
+  }
+  checkVersion();
+  setInterval(checkVersion, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
