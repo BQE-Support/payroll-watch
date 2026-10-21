@@ -109,6 +109,10 @@
   .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; box-shadow: var(--shadow); }
   .bar-row { display: grid; grid-template-columns: 190px 1fr 150px; align-items: center; gap: 14px; padding: 9px 0; cursor: default; }
   .bar-row + .bar-row { border-top: 1px solid var(--border); }
+  @media (max-width: 640px) {
+    .bar-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+    .bar-row .bar-track { grid-column: 1 / -1; order: 3; }
+  }
   .bar-label { font-size: 13.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
   .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
   .bar-track { position: relative; height: 10px; background: var(--surface-alt); border-radius: 6px; overflow: hidden; }
@@ -287,6 +291,14 @@
   @media (max-width: 640px) { .q-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .q-tile { background: var(--surface-alt); border-radius: 8px; padding: 10px 12px; }
   .q-tile .kpi-value { font-size: 22px; }
+  button.q-tile { border: 1px solid transparent; text-align: left; font-family: var(--sans); color: inherit; cursor: pointer; width: 100%; }
+  button.q-tile:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  button.q-tile.active { border-color: var(--accent); background: var(--accent-soft); }
+  .call-drill { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .call-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .call-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .call-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .call-table a { color: var(--accent); font-weight: 600; text-decoration: none; }
   .q-tile.flash { animation: flash 1s steps(2, start) infinite; background: var(--critical-soft); }
   .q-tile.flash .kpi-value { color: var(--critical); }
   @keyframes flash { to { background: var(--surface-alt); } }
@@ -359,6 +371,7 @@
             <span class="section-note" id="queueHours">Open M&ndash;F 6am&ndash;4pm Pacific</span>
           </div>
           <div class="q-tiles" id="queueTiles"></div>
+          <div id="queueDrill"></div>
           <svg class="spark" id="queueSpark" viewBox="0 0 600 70" preserveAspectRatio="none" role="img" aria-label="Callers waiting and agents available today"></svg>
           <div class="spark-legend"><span><i style="background:var(--critical)"></i>Callers waiting</span><span><i style="background:var(--good)"></i>Agents available</span><span id="sparkRange"></span></div>
         </div>
@@ -376,9 +389,10 @@
       </div>
       <div class="panel" style="margin-top:12px;">
         <div class="calls-kpis" id="callsKpis"></div>
+        <div id="callsDrill"></div>
         <div class="breakdown-grid" style="margin-top:16px;">
-          <div><div class="kpi-label">Missed calls</div><div class="mini-list" id="callsMissed"></div></div>
-          <div><div class="kpi-label">Who answered</div><div class="mini-list" id="callsWho"></div></div>
+          <div><div class="kpi-label">Who answered on Payroll</div><div class="mini-list" id="callsWho"></div></div>
+          <div><div class="kpi-label">Transferred in by</div><div class="mini-list" id="callsFrom"></div></div>
         </div>
       </div>
     </div>
@@ -421,6 +435,7 @@
         <span class="section-note">Not urgent by itself &mdash; long/complicated threads worth a look regardless of whose turn it is to reply &middot; excludes GAL &amp; Gusto Incidents</span>
       </div>
       <div class="panel" style="margin-top:12px;" id="backforthAssigneeChart"></div>
+      <div id="backforthSnoozed"></div>
     </div>
 
     <div id="esPayrollSection">
@@ -616,7 +631,8 @@
           <ul>
             <li>The queue panel shows the RingCX Payroll Specialist queue from the snapshot RingCX's wallboard data gives every minute: callers waiting, the longest wait (flashes red at 5 minutes), agents available, and today's presented, answered and abandoned calls. RingCX counts SLA as answered within 30 seconds.</li>
             <li>"Agents on Payroll" lists everyone assigned to the Payroll queue in RingCX, plus anyone on a Payroll call right now. Colors follow RingCX's base states: green Available, red on a call, yellow Working-type statuses, grey breaks, lunch and logged out.</li>
-            <li>The 30-day call list comes from RingCX's call report, refreshed nightly, so today's calls show in the live counters and join the list tomorrow. "Missed" means the caller hung up while waiting or while an agent's phone was ringing.</li>
+            <li>The call lists come from RingCX's call report, refreshed every 15 minutes during Payroll hours. "Missed" means the caller hung up while waiting or while an agent's phone was ringing.</li>
+            <li><b>Direct vs. transferred:</b> RingCX's report keeps one row per call, filed under the last queue but naming the <i>first</i> agent. A call answered on CORE and transferred to Payroll therefore names the CORE agent. So a call answered by someone on the Payroll queue counts as <b>Direct</b>; one first answered by anyone else counts as <b>Transferred in</b>, and "Transferred in by" shows who sent it. "Who answered on Payroll" credits the Payroll agent on a transfer when the Zendesk call tickets (one per agent leg) show one; these exist from 10/14 on, so older transfers often show "Payroll leg not found". Median answer time uses direct calls only.</li>
           </ul>
         </div>
         <div class="method-full">
@@ -754,7 +770,10 @@
     if (r[RC.flagAwaiting]) f.push({ key: "awaiting", label: "Awaiting our reply", cls: "chip-awaiting" });
     if (r[RC.flagBackforth]) f.push({ key: "backforth", label: r[RC.comments] + " comments", cls: "chip-backforth" });
     jiraRefsOf(r).forEach(function (ref) {
-      f.push({ key: "jira:" + ref, label: ref, cls: ref.indexOf("ES-") === 0 ? "chip-es" : "chip-gal", href: JIRA_BROWSE_URL + ref });
+      // GAL chips carry the issue's Support Ranking; a GAL without one gets a red "Missing SR" chip (2026-10-21).
+      var g = ref.indexOf("GAL-") === 0 && DATA && DATA.gal ? DATA.gal[ref] : null, sr = g && g[0] !== null && g[0] !== undefined && g[0] !== "" ? g[0] : null;
+      f.push({ key: "jira:" + ref, label: ref + (sr !== null ? " · SR " + sr : ""), cls: ref.indexOf("ES-") === 0 ? "chip-es" : "chip-gal", href: JIRA_BROWSE_URL + ref });
+      if (g && g[2] && sr === null) f.push({ key: "nosr:" + ref, label: "Missing SR", cls: "chip-noreply", href: JIRA_BROWSE_URL + ref });
     });
     if (r[RC.createdOffHours]) f.push({ key: "offhours", label: CREATED_BUCKET_LABEL[r[RC.createdBucket]] || "Off-hours", cls: "chip-offhours" });
     if (!r[RC.commentsKnown]) f.push({ key: "pending", label: "Comments not read yet", cls: "chip-pending" });
@@ -791,12 +810,28 @@
   // ---- Per-ticket review state (checkbox + note), SHARED: saved through the payroll-watch function
   // (table pr_reviews), so everyone with access sees the same marks, with who changed them last.
   // history: [{ note, by, at }, ...] - past review passes, oldest first, added only by a recheck.
+  // How long a "Reviewed" lasts depends on the item (2026-10-21); notes can be added at any time:
+  //   GAL (With Dev Team) and heavy back-and-forth tickets: 7 days, then they come back on their own
+  //   ES escalations: the day it was ticked (Pacific), so open ones come back every morning
+  //   everything else: until someone rechecks it (the earlier rule)
+  var REVIEW_WEEK_MS = 7 * 86400000;
+  var REVIEW_RULE = {};   // id -> "week" | "day", rebuilt in apply()
+  var ptDateFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" });
   function getReview(id) {
     var r = REVIEWS[id];
     if (!r) return { reviewed: false, note: "", history: [] };
-    return { reviewed: !!r.reviewed, note: r.note || "", updatedAt: r.at ? Date.parse(r.at) : null, by: r.by || "",
+    var out = { reviewed: !!r.reviewed, note: r.note || "", updatedAt: r.at ? Date.parse(r.at) : null, by: r.by || "",
+      reviewedAt: r.rat ? Date.parse(r.rat) : (r.reviewed && r.at ? Date.parse(r.at) : null), rule: REVIEW_RULE[id] || "",
       history: (r.history || []).map(function (h) { return { note: h.note, by: h.by, updatedAt: Date.parse(h.at) }; }) };
+    if (out.reviewed && out.rule && out.reviewedAt) {
+      if (out.rule === "week") out.backOn = out.reviewedAt + REVIEW_WEEK_MS;
+      var lapsed = out.rule === "week" ? Date.now() >= out.backOn : ptDateFmt.format(new Date(out.reviewedAt)) !== ptDateFmt.format(new Date());
+      if (lapsed) { out.reviewed = false; out.lapsed = true; }
+    }
+    return out;
   }
+  // Reviewed now and still inside its week (GAL / back-and-forth): left out of the main lists until it comes back.
+  function snoozed(id) { var rv = getReview(id); return rv.reviewed && rv.rule === "week"; }
   var saveTimers = {};
   function saveReview(id, body, onDone) {
     BQEBoard.api("payroll-watch", { method: "POST", body: Object.assign({ id: String(id) }, body) }).then(function (j) {
@@ -804,9 +839,9 @@
     }).catch(function (e) { setStatus("Couldn't save (" + e.message + ")", true); });
   }
   function setReviewed(id, val) {
-    var r = getReview(id);
-    REVIEWS[id] = { reviewed: val, note: r.note, by: VIEWER && VIEWER.name, at: new Date().toISOString(), history: (REVIEWS[id] || {}).history || [] };
-    saveReview(id, { action: "review", reviewed: val });
+    var r = getReview(id), now = new Date().toISOString();
+    REVIEWS[id] = { reviewed: val, note: r.note, by: VIEWER && VIEWER.name, at: now, rat: val ? now : null, history: (REVIEWS[id] || {}).history || [] };
+    saveReview(id, { action: "review", reviewed: val }, REVIEW_RULE[id] === "week" ? renderAll : null);
   }
   // Notes save 0.8 s after typing stops.
   function setNote(id, text) {
@@ -831,7 +866,7 @@
     saveReview(id, { action: "recheck" }, renderAll);
   }
   function recheckLabelHtml(id, rv) {
-    if (!(rv.reviewed && isPriorDay(rv.updatedAt))) return "";
+    if (rv.rule || !(rv.reviewed && isPriorDay(rv.updatedAt))) return "";   // timed reviews come back on their own
     return '<label class="review-toggle recheck-toggle"><input type="checkbox" data-recheck-id="' + id + '"> Reviewed ' + fmtReviewDate(rv.updatedAt) + ' &mdash; recheck &amp; leave a fresh note?</label>';
   }
   function reviewHistoryHtml(rv) {
@@ -842,7 +877,11 @@
       }).join("") + '</details>';
   }
   function reviewByHtml(rv) {
-    return rv.by && rv.updatedAt ? '<span class="review-by">' + escapeHtml(rv.by) + ' &middot; ' + fmtReviewDate(rv.updatedAt) + '</span>' : '';
+    var s = rv.by && rv.updatedAt ? escapeHtml(rv.by) + ' &middot; ' + fmtReviewDate(rv.updatedAt) : '';
+    if (rv.reviewed && rv.backOn) s += ' &middot; back on the list ' + fmtReviewDate(rv.backOn);
+    else if (rv.reviewed && rv.rule === "day") s += ' &middot; reviewed today';
+    else if (rv.lapsed) s += ' &middot; review from ' + fmtReviewDate(rv.reviewedAt) + ' has lapsed';
+    return s ? '<span class="review-by">' + s + '</span>' : '';
   }
   function reviewControlsHtml(id, rv) {
     return '<div class="ticket-item-review">' +
@@ -923,7 +962,8 @@
     // Not part of `flagged` (it's not urgent by itself) - pulled from workingRows so it still
     // counts every long thread, whoever's turn it is to reply. See "Heavy back-and-forth, by
     // assignee" section for the by-assignee breakdown.
-    var backforth = workingRows.filter(function (r) { return r[RC.flagBackforth]; });
+    var backforthAll = workingRows.filter(function (r) { return r[RC.flagBackforth]; });
+    var backforth = backforthAll.filter(function (r) { return !snoozed(String(r[RC.id])); });
     var urgent = flagged.filter(function (r) { return r[RC.hours] <= 48; });
     var aging = flagged.filter(function (r) { return r[RC.hours] > 48 && r[RC.hours] <= 168; });
     var stale = flagged.filter(function (r) { return r[RC.hours] > 168; });
@@ -940,7 +980,7 @@
       { key: "aging", label: "Aging", value: fmtNum(aging.length), sub: "2–7 days" },
       { key: "stale", label: "Long-stale backlog", value: fmtNum(stale.length), sub: "7+ days" },
       { key: "noReply", label: "No agent reply yet", value: fmtNum(noReply.length), sub: "never touched" },
-      { key: "backforth", label: "Heavy back-and-forth", value: fmtNum(backforth.length), sub: "10+ comments, not urgent by itself" },
+      { key: "backforth", label: "Heavy back-and-forth", value: fmtNum(backforth.length), sub: "10+ comments, not urgent by itself" + (backforthAll.length > backforth.length ? " · " + (backforthAll.length - backforth.length) + " reviewed this week" : "") },
       { key: "gal", label: "With Dev Team (GAL)", value: fmtNum(galRows.length), sub: (ROWS.length ? Math.round(galRows.length / ROWS.length * 100) : 0) + "% of open" },
       { key: "offHours", label: "Created Off-Hours", value: fmtNum(offHoursRows.length), sub: (ROWS.length ? Math.round(offHoursRows.length / ROWS.length * 100) : 0) + "% of open (after-hours or weekend)" },
       { key: "checkedIn", label: "Recently checked in", value: fmtNum(checkedInRows.length), sub: "internal note, last 24h" },
@@ -1095,9 +1135,23 @@
   // assignee, but not part of `flagged`/urgent - sourced from workingRows, not flagged) ----
   var expandedBackforthAssignee = {};
   var backforthAgentGroups = {}, backforthAgentNames = {};
+  // A reviewed GAL / back-and-forth ticket sits in a folded "reviewed this week" list (notes still editable there)
+  // until 7 days after its review, then returns to the main list on its own.
+  var SNOOZE_OPEN = {};
+  function snoozedHtml(key, rows) {
+    if (!rows.length) return "";
+    return '<details class="panel review-history" data-snooze="' + key + '" style="margin-top:10px;"' + (SNOOZE_OPEN[key] ? " open" : "") + '><summary>' +
+      rows.length + ' reviewed in the last 7 days &mdash; each comes back a week after its review</summary>' +
+      '<div style="margin-top:8px;">' + renderTicketItemList(rows, { showAssignee: true }) + '</div></details>';
+  }
+  document.addEventListener("toggle", function (e) {
+    var d = e.target; if (d && d.getAttribute && d.getAttribute("data-snooze")) SNOOZE_OPEN[d.getAttribute("data-snooze")] = d.open;
+  }, true);
   function renderBackforthAssigneeChart() {
     backforthAgentGroups = {};
-    workingRows.filter(function (r) { return r[RC.flagBackforth]; }).forEach(function (r) {
+    var all = workingRows.filter(function (r) { return r[RC.flagBackforth]; });
+    document.getElementById("backforthSnoozed").innerHTML = snoozedHtml("backforth", all.filter(function (r) { return snoozed(String(r[RC.id])); }));
+    all.filter(function (r) { return !snoozed(String(r[RC.id])); }).forEach(function (r) {
       var name = r[RC.assignee] || "Unassigned";
       var key = "a:" + name;
       backforthAgentNames[key] = name;
@@ -1405,8 +1459,12 @@
   // its own section rather than being folded into the urgency/assignee views.
   function renderGalSection() {
     var galRows = ROWS.filter(function (r) { return r[RC.gal]; });
-    document.getElementById("galNote").textContent = fmtNum(galRows.length) + " of " + fmtNum(ROWS.length) + " open tickets reference a GAL Jira ticket";
-    document.getElementById("galList").innerHTML = renderTicketItemList(galRows, { showAssignee: true });
+    var active = galRows.filter(function (r) { return !snoozed(String(r[RC.id])); });
+    var noSr = galRows.filter(function (r) { return flagsOf(r).some(function (f) { return f.key.indexOf("nosr:") === 0; }); });
+    document.getElementById("galNote").textContent = fmtNum(galRows.length) + " of " + fmtNum(ROWS.length) + " open tickets reference a GAL Jira ticket" +
+      (noSr.length ? " · " + noSr.length + " missing a Support Ranking" : "") + " · a review hides a ticket here for 7 days";
+    document.getElementById("galList").innerHTML = (active.length ? renderTicketItemList(active, { showAssignee: true }) : '<div class="panel-empty">Every GAL ticket was reviewed in the last 7 days.</div>') +
+      snoozedHtml("gal", galRows.filter(function (r) { return snoozed(String(r[RC.id])); }));
   }
 
   // ---- Gusto Incidents section ----
@@ -1431,7 +1489,8 @@
   // its own population, not a slice of ROWS/workingRows.
   function renderEsPayrollSection() {
     document.getElementById("esPayrollNote").textContent =
-      fmtNum(ES_ROWS.length) + " open ES " + (ES_ROWS.length === 1 ? "ticket" : "tickets") + " tagged component Payroll (matches Jira filter 40865)";
+      fmtNum(ES_ROWS.length) + " open ES " + (ES_ROWS.length === 1 ? "ticket" : "tickets") + " tagged component Payroll (matches Jira filter 40865)" +
+      " · reviews last for the day, so open ones come back every morning";
     var listEl = document.getElementById("esPayrollList");
     if (!ES_ROWS.length) { listEl.innerHTML = '<div class="panel-empty">No open ES escalations tagged Payroll right now.</div>'; return; }
     var sorted = ES_ROWS.slice().sort(function (a, b) { return (b[ES_RC.daysOpen] || 0) - (a[ES_RC.daysOpen] || 0); });
@@ -1521,15 +1580,18 @@
     var t = [
       { label: "Waiting now", value: fmtNum(waiting), sub: waiting ? "in the queue" : "nobody waiting", crit: waiting > 0 && !avail },
       { label: "Longest wait", value: waiting ? fmtDur(longest) : "—", sub: "flashes at 5 min", flash: waiting > 0 && longest >= WAIT_FLASH_SEC },
-      { label: "Available", value: fmtNum(avail), sub: fmtNum(+Q.staffed || 0) + " logged in to this queue", crit: open && !avail },
-      { label: "Answered today", value: fmtNum(+Q.accepted || 0), sub: fmtNum(+Q.presented || 0) + " presented" },
-      { label: "Abandoned today", value: fmtNum(+Q.abandoned || 0), sub: "hung up before an answer", crit: (+Q.abandoned || 0) > 0 },
-      { label: "SLA today", value: pass + fail ? Math.round(pass / (pass + fail) * 100) + "%" : "—", sub: "answered within 30 s" }
+      { key: "available", label: "Available", value: fmtNum(avail), sub: fmtNum(+Q.staffed || 0) + " logged in to this queue", crit: open && !avail },
+      { key: "answered", label: "Answered today", value: fmtNum(+Q.accepted || 0), sub: fmtNum(+Q.presented || 0) + " presented" },
+      { key: "abandoned", label: "Abandoned today", value: fmtNum(+Q.abandoned || 0), sub: "hung up before an answer", crit: (+Q.abandoned || 0) > 0 },
+      { key: "sla", label: "SLA today", value: pass + fail ? Math.round(pass / (pass + fail) * 100) + "%" : "—", sub: "answered within 30 s" }
     ];
+    // Tiles with a key open a list underneath (today's calls come from the call report, refreshed every 15 min).
     tiles.innerHTML = t.map(function (x) {
-      return '<div class="q-tile' + (x.flash ? " flash" : "") + '"><div class="kpi-label">' + x.label + '</div>' +
-        '<div class="kpi-value' + (x.crit || x.flash ? " crit" : "") + '">' + x.value + '</div><div class="kpi-sub">' + x.sub + '</div></div>';
+      var tag = x.key ? 'button type="button" data-q-key="' + x.key + '"' : "div";
+      return '<' + tag + ' class="q-tile' + (x.flash ? " flash" : "") + (x.key && callDrill.queue === x.key ? " active" : "") + '"><div class="kpi-label">' + x.label + '</div>' +
+        '<div class="kpi-value' + (x.crit || x.flash ? " crit" : "") + '">' + x.value + '</div><div class="kpi-sub">' + x.sub + '</div></' + (x.key ? "button" : "div") + '>';
     }).join("");
+    renderQueueDrill();
     var note = "RingCX snapshot " + fmtClock(Date.parse(DATA.queue.ts));
     if (age !== null && age > STALE_QUEUE_SEC) note += " · " + Math.round(age / 60) + " min old";
     document.getElementById("queueNote").textContent = note;
@@ -1601,41 +1663,152 @@
     document.getElementById("agentsNote").textContent = rows.length + " logged in · " + avail + " available";
   }
 
-  // ---- calls, last 30 days ----
-  // pr_board() calls: [startUtc, agent ("Last, First"), callResult, abandoned, queueSec, talkSec, uii, termParty, hasRecording]
+  // ---- calls ----
+  // pr_board() calls: [startUtc, agent ("Last, First"), callResult, abandoned, queueSec, talkSec, uii, termParty,
+  //   hasRecording, agentId, agentOnPayrollQueue, payrollLegAgentIds]
+  // RingCX's call report keeps ONE row per call, filed under the last queue (Payroll Specialist) but naming the
+  // FIRST agent: a call answered on CORE and transferred here names the CORE agent. The Payroll agent's leg comes
+  // from the Zendesk call tickets when there is one (since 10/14). So each call is one of:
+  //   direct       answered by someone on the Payroll queue (callers who picked the Payroll option)
+  //   transferred  answered first by someone who isn't on the Payroll queue, then sent to Payroll
+  //   missed       the caller hung up while waiting or while a phone rang
   function personName(s) { var p = String(s || "").split(","); return p.length === 2 ? (p[1].trim() + " " + p[0].trim()) : String(s || ""); }
   function median(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }); var m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+  function callKind(r) { return r[3] ? "missed" : (r[10] ? "direct" : "transferred"); }
+  function nameOf(id) { return ((DATA && DATA.names) || {})[String(id)] || ("Agent " + id); }
+  function payrollAgents(r) { return r[3] ? [] : (r[10] ? [personName(r[1])] : (r[11] || []).map(nameOf)); }
+  function isToday(r) { return ptDateFmt.format(new Date(Date.parse(r[0]))) === ptDateFmt.format(new Date()); }
+  var CALL_KIND_LABEL = { direct: "Direct", transferred: "Transferred in", missed: "Missed" };
+  function callRowsHtml(rows, emptyText) {
+    if (!rows.length) return '<div class="panel-empty">' + (emptyText || "No calls.") + '</div>';
+    return '<div class="table-wrap"><table class="call-table"><thead><tr><th>When</th><th>Kind</th><th>Answered by</th><th>Wait</th><th>Talk</th><th></th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var t = Date.parse(r[0]), k = callKind(r), who;
+        if (k === "missed") who = '<span class="review-by">&mdash;</span>';
+        else if (k === "direct") who = escapeHtml(personName(r[1]));
+        else {
+          var p = payrollAgents(r);
+          who = (p.length ? escapeHtml(p.join(", ")) + " on Payroll" : '<span class="review-by">Payroll leg not found</span>') +
+            '<div class="review-by">first answered by ' + escapeHtml(personName(r[1])) + '</div>';
+        }
+        return '<tr><td>' + escapeHtml(ptDayFmt.format(new Date(t)) + " " + fmtClock(t)) + (inPayrollHours(t) ? "" : '<div class="review-by">outside Payroll hours</div>') + '</td>' +
+          '<td>' + CALL_KIND_LABEL[k] + '</td><td>' + who + '</td><td>' + fmtDur(r[4]) + '</td><td>' + (k === "missed" ? "&mdash;" : fmtDur(r[5])) + '</td>' +
+          '<td><a href="https://bqe.zendesk.com/agent/search/1?type=ticket&q=' + encodeURIComponent(r[6]) + '" target="_blank" rel="noopener">Ticket &#8599;</a></td></tr>';
+      }).join("") + '</tbody></table></div>';
+  }
+  // Missed calls, laid out like the RingCX Live View's Abandoned drill-down: waited before hanging up, the caller,
+  // and a note for calls that ended while an agent's phone rang, very short ones (misdial or transfer leg), and 5+ min waits.
+  // Ringing = the report says CONNECTED with 0 s talk and no recording, ended by the caller or by RingCX (SYSTEM).
+  function hungUpRinging(r) { return r[2] === "CONNECTED" && !(+r[5]) && (r[7] === "CALLER" || r[7] === "SYSTEM") && !r[8]; }
+  function missedWaitSec(r) { return hungUpRinging(r) ? (+r[13] || 0) : (+r[4] || 0); }
+  function missedDrillHtml(title, rows) {
+    var waits = rows.map(missedWaitSec);
+    var avg = waits.length ? waits.reduce(function (s, x) { return s + x; }, 0) / waits.length : 0;
+    var long = waits.filter(function (w) { return w >= WAIT_FLASH_SEC; }).length;
+    var sub = rows.length + " call" + (rows.length === 1 ? "" : "s") + (rows.length ? " · avg wait " + fmtDur(avg) + " · " + long + " waited 5m+" : "");
+    var body = rows.length ? '<div class="table-wrap"><table class="call-table"><thead><tr><th>Time (PT)</th><th>Waited before hanging up</th><th>Caller</th><th>Note</th><th></th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var t = Date.parse(r[0]), w = missedWaitSec(r), ringing = hungUpRinging(r);
+        var note = (ringing ? '<span class="chip chip-awaiting">' + (r[7] === "SYSTEM" ? "Dropped while ringing " : "Hung up while ringing ") + escapeHtml(personName(r[1])) + " (" + fmtDur(Math.max(0, w - (+r[4] || 0))) + ")</span> " : "") +
+          (!ringing && w <= 5 ? '<span class="chip chip-pending">≤5s: likely misdial or transfer leg</span>' : (w >= WAIT_FLASH_SEC ? '<span class="chip chip-noreply">Waited 5m+</span>' : "")) +
+          (inPayrollHours(t) ? "" : ' <span class="chip chip-offhours">Outside Payroll hours</span>');
+        return '<tr' + (w >= WAIT_FLASH_SEC ? ' style="background:var(--critical-soft)"' : "") + '><td>' + escapeHtml(ptDayFmt.format(new Date(t)) + " " + fmtClock(t)) + '</td>' +
+          '<td style="font-variant-numeric:tabular-nums;' + (w >= WAIT_FLASH_SEC ? 'color:var(--critical);font-weight:700;' : "") + '">' + fmtDur(w) + '</td>' +
+          '<td>' + escapeHtml(r[12] || "") + '</td><td>' + note + '</td>' +
+          '<td><a href="https://bqe.zendesk.com/agent/search/1?type=ticket&q=' + encodeURIComponent(r[6]) + '" target="_blank" rel="noopener">Ticket &#8599;</a></td></tr>';
+      }).join("") + '</tbody></table></div>' : '<div class="panel-empty">No missed calls.</div>';
+    return drillHtml(title + ' <span class="section-note" style="font-family:var(--sans)">' + sub + '</span>', body +
+      '<div class="review-by" style="margin-top:6px;">From RingCX’s call report. Includes calls that ended while an agent’s phone was ringing, whether the caller hung up or RingCX dropped the call (the report marks those CONNECTED with 0 s talk and no recording), matching RingCX’s live Abandoned counter. Waited = time from the start of the call to the hang-up.</div>');
+  }
+  function drillHtml(title, body) {
+    return '<div class="call-drill"><div class="section-head"><h2 class="section-title" style="font-size:16px;">' + title + '</h2>' +
+      '<button type="button" class="pill-toggle" data-drill-close="1">Close</button></div><div style="margin-top:8px;">' + body + '</div></div>';
+  }
+  var callDrill = { calls: null, queue: null };
+  function last30() { return (DATA && DATA.calls) || []; }
+  var CALL_SETS = {
+    all: ["All Payroll calls, last 30 days", function (c) { return c; }],
+    direct: ["Direct to Payroll", function (c) { return c.filter(function (r) { return callKind(r) === "direct"; }); }],
+    transferred: ["Transferred in from another queue", function (c) { return c.filter(function (r) { return callKind(r) === "transferred"; }); }],
+    missed: ["Missed calls", function (c) { return c.filter(function (r) { return r[3]; }); }],
+    missedStaffed: ["Missed during Payroll hours", function (c) { return c.filter(function (r) { return r[3] && inPayrollHours(Date.parse(r[0])); }); }],
+    waits: ["Direct calls, longest wait first", function (c) { return c.filter(function (r) { return callKind(r) === "direct"; }).sort(function (a, b) { return (b[4] || 0) - (a[4] || 0); }); }]
+  };
   function renderCalls() {
-    var c = (DATA && DATA.calls) || [];
-    var missed = c.filter(function (r) { return r[3]; });
-    var answered = c.filter(function (r) { return !r[3] && r[2] === "CONNECTED"; });
-    var missedStaffed = missed.filter(function (r) { return inPayrollHours(Date.parse(r[0])); });
-    var waits = answered.map(function (r) { return +r[4] || 0; });
+    var c = last30();
+    var direct = CALL_SETS.direct[1](c), transferred = CALL_SETS.transferred[1](c), missed = CALL_SETS.missed[1](c), missedStaffed = CALL_SETS.missedStaffed[1](c);
+    var legsFound = transferred.filter(function (r) { return (r[11] || []).length; }).length;
+    var waits = direct.map(function (r) { return +r[4] || 0; });
     var k = [
-      { label: "Calls", value: fmtNum(c.length), sub: "last 30 days" },
-      { label: "Answered", value: fmtNum(answered.length), sub: c.length ? Math.round(answered.length / c.length * 100) + "% of calls" : "" },
-      { label: "Missed", value: fmtNum(missed.length), sub: c.length ? Math.round(missed.length / c.length * 100) + "% miss rate" : "", crit: missed.length > 0 },
-      { label: "Missed in staffed hours", value: fmtNum(missedStaffed.length), sub: "M–F 6am–4pm PT", crit: missedStaffed.length > 0 },
-      { label: "Median answer time", value: waits.length ? fmtDur(median(waits)) : "—", sub: waits.length ? "slowest " + fmtDur(Math.max.apply(null, waits)) : "" }
+      { key: "all", label: "Calls", value: fmtNum(c.length), sub: "last 30 days" },
+      { key: "direct", label: "Direct to Payroll", value: fmtNum(direct.length), sub: "answered by the Payroll queue" },
+      { key: "transferred", label: "Transferred in", value: fmtNum(transferred.length), sub: legsFound + " with the Payroll leg found" },
+      { key: "missed", label: "Missed", value: fmtNum(missed.length), sub: c.length ? Math.round(missed.length / c.length * 100) + "% miss rate" : "", crit: missed.length > 0 },
+      { key: "missedStaffed", label: "Missed in staffed hours", value: fmtNum(missedStaffed.length), sub: "M–F 6am–4pm PT", crit: missedStaffed.length > 0 },
+      { key: "waits", label: "Median answer time", value: waits.length ? fmtDur(median(waits)) : "—", sub: waits.length ? "direct calls · slowest " + fmtDur(Math.max.apply(null, waits)) : "" }
     ];
     document.getElementById("callsKpis").innerHTML = k.map(function (x) {
-      return '<div class="q-tile"><div class="kpi-label">' + x.label + '</div><div class="kpi-value' + (x.crit ? " crit" : "") + '">' + x.value + '</div><div class="kpi-sub">' + x.sub + '</div></div>';
+      return '<button type="button" class="q-tile' + (callDrill.calls === x.key ? " active" : "") + '" data-call-key="' + x.key + '"><div class="kpi-label">' + x.label + '</div>' +
+        '<div class="kpi-value' + (x.crit ? " crit" : "") + '">' + x.value + '</div><div class="kpi-sub">' + x.sub + '</div></button>';
     }).join("");
-    document.getElementById("callsMissed").innerHTML = missed.length ? missed.slice(0, 15).map(function (r) {
-      var t = Date.parse(r[0]);
-      return '<div class="row"><span>' + escapeHtml(ptDayFmt.format(new Date(t)) + " " + fmtClock(t)) + (inPayrollHours(t) ? "" : ' <span class="muted">(outside hours)</span>') + '</span>' +
-        '<span class="muted">waited ' + fmtDur(r[4]) + ' &middot; <a href="https://bqe.zendesk.com/agent/search/1?type=ticket&q=' + encodeURIComponent(r[6]) + '" target="_blank" rel="noopener">Ticket &#8599;</a></span></div>';
-    }).join("") + (missed.length > 15 ? '<div class="row muted">+' + (missed.length - 15) + ' more</div>' : "") : '<div class="panel-empty">No missed calls in the last 30 days.</div>';
-    var who = {};
-    answered.forEach(function (r) { var n = personName(r[1]) || "Unknown"; who[n] = (who[n] || 0) + 1; });
-    var whoList = Object.keys(who).sort(function (a, b) { return who[b] - who[a]; });
-    document.getElementById("callsWho").innerHTML = whoList.length ? whoList.map(function (n) {
-      return '<div class="row"><span>' + escapeHtml(n) + '</span><span class="muted">' + who[n] + ' call' + (who[n] === 1 ? "" : "s") + '</span></div>';
-    }).join("") : '<div class="panel-empty">No answered calls.</div>';
+    var set = callDrill.calls && CALL_SETS[callDrill.calls];
+    document.getElementById("callsDrill").innerHTML = !set ? "" :
+      (callDrill.calls === "missed" || callDrill.calls === "missedStaffed") ? missedDrillHtml(set[0], set[1](c))
+      : drillHtml(set[0] + " (" + set[1](c).length + ")", callRowsHtml(set[1](c)));
+    var who = {}, from = {};
+    c.forEach(function (r) {
+      payrollAgents(r).forEach(function (n) { who[n] = (who[n] || 0) + 1; });
+      if (callKind(r) === "transferred") { var n = personName(r[1]) || "Unknown"; from[n] = (from[n] || 0) + 1; }
+    });
+    function countList(o, empty) {
+      var names = Object.keys(o).sort(function (a, b) { return o[b] - o[a]; });
+      return names.length ? names.map(function (n) {
+        return '<div class="row"><span>' + escapeHtml(n) + '</span><span class="muted">' + o[n] + ' call' + (o[n] === 1 ? "" : "s") + '</span></div>';
+      }).join("") : '<div class="panel-empty">' + empty + '</div>';
+    }
+    var noLeg = transferred.length - legsFound;
+    document.getElementById("callsWho").innerHTML = countList(who, "No answered calls.") +
+      (noLeg ? '<div class="row muted">+' + noLeg + ' transferred call' + (noLeg === 1 ? "" : "s") + ' where the Payroll leg wasn’t found</div>' : "");
+    document.getElementById("callsFrom").innerHTML = countList(from, "No calls transferred in.");
     var synced = DATA && DATA.sync && DATA.sync.calls;
     document.getElementById("callsNote").textContent = "From RingCX's call report" + (synced ? ", updated " + ptDayFmt.format(new Date(synced)) + " " + fmtClock(Date.parse(synced)) : "") +
-      " · today's calls are in the live counts above";
+      " · refreshed every 15 min during Payroll hours · click a tile for the calls";
   }
+  document.getElementById("callsKpis").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-call-key]"); if (!b) return;
+    var key = b.getAttribute("data-call-key"); callDrill.calls = callDrill.calls === key ? null : key; renderCalls();
+  });
+  document.getElementById("callsDrill").addEventListener("click", function (e) {
+    if (e.target.closest("[data-drill-close]")) { callDrill.calls = null; renderCalls(); }
+  });
+
+  // ---- queue tile drill-downs (today) ----
+  function renderQueueDrill() {
+    var el = document.getElementById("queueDrill"), key = callDrill.queue;
+    if (!key || !DATA) { el.innerHTML = ""; return; }
+    var today = last30().filter(isToday);
+    if (key === "available") {
+      var av = ((DATA && DATA.agents) || []).filter(function (a) { return agentColor(a) === "st-green"; });
+      el.innerHTML = drillHtml("Available now (" + av.length + ")", av.length ? '<div class="mini-list">' + av.map(function (a) {
+        return '<div class="row"><span>' + escapeHtml(((a[1] || "") + " " + (a[2] || "")).trim()) + '</span><span class="muted">' + escapeHtml(agentLabel(a)) + ' &middot; ' + fmtDur((+a[6] || 0) + (queueAgeSec() || 0)) + '</span></div>';
+      }).join("") + '</div>' : '<div class="panel-empty">Nobody on the Payroll queue is Available right now.</div>');
+      return;
+    }
+    if (key === "abandoned") { el.innerHTML = missedDrillHtml("Abandoned calls today", today.filter(function (r) { return r[3]; })); return; }
+    var rows = key === "abandoned" ? today.filter(function (r) { return r[3]; })
+      : key === "sla" ? today.filter(function (r) { return !r[3]; }).sort(function (a, b) { return (b[4] || 0) - (a[4] || 0); })
+      : today.filter(function (r) { return !r[3]; });
+    var title = { answered: "Answered today", abandoned: "Abandoned today", sla: "Answered today, longest wait first (SLA = within 30 s)" }[key];
+    el.innerHTML = drillHtml(title + " (" + rows.length + ")", callRowsHtml(rows, "No calls in the call report yet today.") +
+      '<div class="review-by" style="margin-top:6px;">From the call report (every 15 min), so the newest calls can take a few minutes to appear; the tile counts are live.</div>');
+  }
+  document.getElementById("queueTiles").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-q-key]"); if (!b) return;
+    var key = b.getAttribute("data-q-key"); callDrill.queue = callDrill.queue === key ? null : key; renderQueue();
+  });
+  document.getElementById("queueDrill").addEventListener("click", function (e) {
+    if (e.target.closest("[data-drill-close]")) { callDrill.queue = null; renderQueue(); }
+  });
 
   // ---- load and refresh ----
   var renderPending = false;
@@ -1645,6 +1818,9 @@
     ROWS = buildRows(DATA.tickets || []);
     HISTORY = (DATA.history || []).map(function (h) { return [Date.parse(h[0]), h[1], h[2], h[3], h[4], h[5], h[6] == null ? null : h[6]]; });
     ES_ROWS = buildEsRows(DATA.es || [], DATA.es_links || {}, ROWS);
+    REVIEW_RULE = {};
+    ROWS.forEach(function (r) { if (r[RC.gal] || r[RC.flagBackforth]) REVIEW_RULE[String(r[RC.id])] = "week"; });
+    ES_ROWS.forEach(function (e) { REVIEW_RULE["jira:" + e[ES_RC.key]] = "day"; });
     GENERATED_AT = fmtClock(fetchedAt);
     // Don't redraw the ticket sections while someone is typing a note (it would drop their cursor).
     if (typing()) renderPending = true; else { renderPending = false; renderAll(); }
