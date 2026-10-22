@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -384,6 +384,21 @@
       <div class="snapshot-tag"><span class="snapshot-dot" id="liveDot"></span><span id="genDate">Loading&hellip;</span></div>
     </div>
 
+    <div data-section="focus" data-section-label="Where to Focus">
+    <details class="panel" id="suggestionsDetails">
+      <summary>
+        <span class="section-title">Where to Focus</span>
+        <span class="section-note" id="suggestionsCount" style="font-family:var(--sans); font-weight:400;"></span>
+      </summary>
+      <div style="margin-top:14px;">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+          <button class="pill-toggle" id="suggestionsViewToggle" aria-pressed="false">Show completed</button>
+        </div>
+        <div id="suggestionsPanel"></div>
+      </div>
+    </details>
+    </div>
+
     <div data-section="queueSection" id="queueSection">
       <div class="section-head">
         <h2 class="hero-title">Payroll Specialist queue, live</h2>
@@ -407,6 +422,11 @@
       </div>
     </div>
 
+    <div data-section="kpis" data-section-label="Ticket KPI tiles" style="display:flex; flex-direction:column; gap:28px;">
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div id="kpiDrilldownWrap"></div>
+    </div>
+
     <div data-section="callsSection" id="callsSection">
       <div class="section-head">
         <h2 class="section-title">Payroll calls, last 30 days</h2>
@@ -420,26 +440,6 @@
           <div><div class="kpi-label">Transferred in by</div><div class="mini-list" id="callsFrom"></div></div>
         </div>
       </div>
-    </div>
-
-    <div data-section="focus" data-section-label="Where to Focus">
-    <details class="panel" id="suggestionsDetails">
-      <summary>
-        <span class="section-title">Where to Focus</span>
-        <span class="section-note" id="suggestionsCount" style="font-family:var(--sans); font-weight:400;"></span>
-      </summary>
-      <div style="margin-top:14px;">
-        <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
-          <button class="pill-toggle" id="suggestionsViewToggle" aria-pressed="false">Show completed</button>
-        </div>
-        <div id="suggestionsPanel"></div>
-      </div>
-    </details>
-    </div>
-
-    <div data-section="kpis" data-section-label="Ticket KPI tiles" style="display:flex; flex-direction:column; gap:28px;">
-    <div class="kpi-grid" id="kpiGrid"></div>
-    <div id="kpiDrilldownWrap"></div>
     </div>
 
     <div data-section="tierSection" id="tierSection">
@@ -685,7 +685,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.4</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.5</footer>
     </div>
   </div>
 </div>
