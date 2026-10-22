@@ -239,6 +239,17 @@
   .copy-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 6px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
   .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
   .copy-btn.copied { border-color: var(--good); color: var(--good); }
+  dialog.week-report { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+    padding: 20px 22px; width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; }
+  dialog.week-report::backdrop { background: rgba(12,18,32,0.55); }
+  .wr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .wr-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  .wr-table th, .wr-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: right; }
+  .wr-table th:first-child, .wr-table td:first-child { text-align: left; }
+  .wr-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); font-weight: 600; }
+  .wr-table tr.wr-group td { color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; padding-top: 14px; }
+  .wr-better { color: var(--good); } .wr-worse { color: var(--critical); } .wr-same { color: var(--ink-3); }
+  .wr-foot { margin-top: 12px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
 
   .checkin-status { font-size: 11.5px; margin-top: 6px; }
   .checkin-status-done { color: var(--good); font-weight: 600; }
@@ -336,11 +347,23 @@
     <div class="topbar" id="topbar" hidden>
       <span class="viewers" id="viewers"></span>
       <span id="viewerName"></span>
+      <button type="button" class="top-btn" id="weekReportBtn" hidden>Last week</button>
       <button type="button" class="top-btn" id="arrangeBtn" title="Move sections around; your order is saved for you on every device">Arrange</button>
       <button type="button" class="top-btn" id="resetLayoutBtn" hidden>Reset layout</button>
       <button type="button" class="top-btn" id="themeBtn">Theme</button>
       <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
     </div>
+
+    <dialog class="week-report" id="weekReport">
+      <div class="wr-head">
+        <h2 class="section-title" id="weekReportTitle">Last week</h2>
+        <span style="display:flex; gap:8px;">
+          <button type="button" class="copy-btn" id="weekReportCopy">Copy report</button>
+          <button type="button" class="copy-btn" id="weekReportClose">Close</button>
+        </span>
+      </div>
+      <div id="weekReportBody"></div>
+    </dialog>
 
     <div class="signin" id="signin" hidden>
       <div class="eyebrow">Support Operations &middot; Payroll</div>
@@ -662,7 +685,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.3</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.4</footer>
     </div>
   </div>
 </div>
@@ -1849,12 +1872,98 @@
     BQEBoard.api("payroll-watch").then(function (j) {
       fetchedAt = Date.now(); DATA = j; VIEWER = j.viewer; REVIEWS = j.reviews || {};
       apply();
+      document.getElementById("weekReportBtn").hidden = !(DATA.week_report && DATA.week_report.length === 2);
     }).catch(function (e) {
       setStatus("Couldn't refresh (" + e.message + "). Showing the last data.", true);
     }).then(function () { loading = false; });
   }
   // Timers (longest wait, time in status) tick between refreshes.
   setInterval(function () { if (DATA) { renderQueue(); renderAgents(); } }, 5000);
+
+  // ---- Last week report: pr_week_report() in pr_board(), last two complete Mon-Sun Pacific weeks ----
+  // dir: 1 = higher is better, -1 = lower is better, 0 = neutral
+  var WR_ROWS = [
+    { group: "Volume" },
+    { label: "Tickets created", get: function (w) { return w.created; }, dir: 0 },
+    { label: "Created off-hours or weekend", get: function (w) { return w.created_off_hours; }, dir: 0 },
+    { label: "Tickets solved", get: function (w) { return w.solved; }, dir: 1 },
+    { label: "Net change (created minus solved)", get: function (w) { return w.created - w.solved; }, dir: -1, signed: true },
+    { group: "Speed (tickets solved that week)" },
+    { label: "Median first reply", get: function (w) { return w.reply_median_min; }, dir: -1, fmt: "dur" },
+    { label: "Median time to first solve", get: function (w) { return w.resolution_median_min; }, dir: -1, fmt: "dur" },
+    { label: "Solved within 24 hours", get: function (w) { return w.solved ? Math.round(w.solved_24h / w.solved * 100) : null; }, dir: 1, fmt: "pct" },
+    { group: "Backlog at end of week" },
+    { label: "Open tickets", get: function (w) { return w.backlog ? w.backlog.open : null; }, dir: -1 },
+    { label: "Flagged", get: function (w) { return w.backlog ? w.backlog.flagged : null; }, dir: -1 },
+    { label: "Flagged 7+ days", get: function (w) { return w.backlog ? w.backlog.stale : null; }, dir: -1 }
+  ];
+  function wrDur(min) {
+    if (min === null || min === undefined) return "n/a";
+    if (min < 60) return Math.round(min) + "m";
+    if (min < 1440) return (min / 60).toFixed(1) + "h";
+    return (min / 1440).toFixed(1) + "d";
+  }
+  function wrVal(row, v) {
+    if (v === null || v === undefined) return "n/a";
+    if (row.fmt === "dur") return wrDur(v);
+    if (row.fmt === "pct") return v + "%";
+    return (row.signed && v > 0 ? "+" : "") + fmtNum(v);
+  }
+  function wrChange(row, cur, prev) {
+    if (cur === null || cur === undefined || prev === null || prev === undefined) return { text: "", cls: "wr-same" };
+    var d = cur - prev;
+    var cls = d === 0 || !row.dir ? "wr-same" : (d > 0) === (row.dir > 0) ? "wr-better" : "wr-worse";
+    var text = d === 0 ? "same" : row.fmt === "dur" ? (d > 0 ? "+" : "-") + wrDur(Math.abs(d)) : row.fmt === "pct" ? (d > 0 ? "+" : "") + d + " pts" : (d > 0 ? "+" : "") + fmtNum(d);
+    return { text: text, cls: cls };
+  }
+  function wrDate(s) { var p = String(s).split("-"); return Number(p[1]) + "/" + Number(p[2]); }
+  function wrAsOf(w) {
+    if (!w.backlog) return "no snapshot";
+    return new Date(w.backlog.ts).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PT";
+  }
+  function renderWeekReport() {
+    var wk = DATA.week_report, cur = wk[0], prev = wk[1];
+    document.getElementById("weekReportTitle").textContent = "Last week: " + wrDate(cur.start) + " to " + wrDate(cur.end);
+    var html = '<table class="wr-table"><thead><tr><th></th><th>' + wrDate(cur.start) + "-" + wrDate(cur.end) + '</th><th>' + wrDate(prev.start) + "-" + wrDate(prev.end) + '</th><th>Change</th></tr></thead><tbody>';
+    WR_ROWS.forEach(function (row) {
+      if (row.group) { html += '<tr class="wr-group"><td colspan="4">' + escapeHtml(row.group) + '</td></tr>'; return; }
+      var a = row.get(cur), b = row.get(prev), c = wrChange(row, a, b);
+      html += '<tr><td>' + escapeHtml(row.label) + '</td><td>' + wrVal(row, a) + '</td><td>' + wrVal(row, b) + '</td><td class="' + c.cls + '">' + c.text + '</td></tr>';
+    });
+    html += '</tbody></table><div class="wr-foot">Weeks run Monday to Sunday, Pacific. Payroll group tickets, all of them (GAL and Gusto Incidents included). ' +
+      'Speed uses Zendesk calendar time for tickets solved that week; first reply is only known for ' + fmtNum(cur.reply_n) + ' of ' + fmtNum(cur.solved) + ' (' + fmtNum(prev.reply_n) + ' of ' + fmtNum(prev.solved) + ' the week before). ' +
+      'Backlog is the last hourly snapshot before the week ended: ' + escapeHtml(wrAsOf(cur)) + ' and ' + escapeHtml(wrAsOf(prev)) + '. Open counts every open ticket; Flagged leaves out GAL and Gusto Incidents, like the tiles above.</div>';
+    document.getElementById("weekReportBody").innerHTML = html;
+  }
+  function weekReportText() {
+    var wk = DATA.week_report, cur = wk[0], prev = wk[1];
+    var lines = ["Payroll tickets, week of " + wrDate(cur.start) + " to " + wrDate(cur.end) + " (vs " + wrDate(prev.start) + " to " + wrDate(prev.end) + ")"];
+    WR_ROWS.forEach(function (row) {
+      if (row.group) { lines.push("", row.group); return; }
+      var a = row.get(cur), b = row.get(prev), c = wrChange(row, a, b);
+      lines.push("- " + row.label + ": " + wrVal(row, a) + " (prior " + wrVal(row, b) + (c.text && c.text !== "same" ? ", " + c.text : "") + ")");
+    });
+    lines.push("", "Backlog as of " + wrAsOf(cur) + ".");
+    return lines.join("\n");
+  }
+  document.getElementById("weekReportBtn").addEventListener("click", function () {
+    if (!DATA || !DATA.week_report) return;
+    renderWeekReport();
+    document.getElementById("weekReport").showModal();
+  });
+  document.getElementById("weekReportClose").addEventListener("click", function () { document.getElementById("weekReport").close(); });
+  document.getElementById("weekReport").addEventListener("click", function (e) { if (e.target === this) this.close(); });
+  document.getElementById("weekReportCopy").addEventListener("click", function () {
+    var btn = this, text = weekReportText();
+    function flash(ok) { btn.textContent = ok ? "Copied!" : "Copy failed"; btn.classList.toggle("copied", ok); setTimeout(function () { btn.textContent = "Copy report"; btn.classList.remove("copied"); }, 1800); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { flash(true); }).catch(function () { flash(false); });
+    else {
+      try {
+        var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        btn.closest("dialog").appendChild(ta); ta.select(); var ok = document.execCommand("copy"); ta.remove(); flash(ok);
+      } catch (err) { flash(false); }
+    }
+  });
 
   // ---- theme ----
   var THEME_KEY = "bqeBoards.theme";
