@@ -336,6 +336,8 @@
     <div class="topbar" id="topbar" hidden>
       <span class="viewers" id="viewers"></span>
       <span id="viewerName"></span>
+      <button type="button" class="top-btn" id="arrangeBtn" title="Move sections around; your order is saved for you on every device">Arrange</button>
+      <button type="button" class="top-btn" id="resetLayoutBtn" hidden>Reset layout</button>
       <button type="button" class="top-btn" id="themeBtn">Theme</button>
       <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
     </div>
@@ -359,7 +361,7 @@
       <div class="snapshot-tag"><span class="snapshot-dot" id="liveDot"></span><span id="genDate">Loading&hellip;</span></div>
     </div>
 
-    <div id="queueSection">
+    <div data-section="queueSection" id="queueSection">
       <div class="section-head">
         <h2 class="hero-title">Payroll Specialist queue, live</h2>
         <span class="section-note" id="queueNote"></span>
@@ -382,7 +384,7 @@
       </div>
     </div>
 
-    <div id="callsSection">
+    <div data-section="callsSection" id="callsSection">
       <div class="section-head">
         <h2 class="section-title">Payroll calls, last 30 days</h2>
         <span class="section-note" id="callsNote"></span>
@@ -397,6 +399,7 @@
       </div>
     </div>
 
+    <div data-section="focus" data-section-label="Where to Focus">
     <details class="panel" id="suggestionsDetails">
       <summary>
         <span class="section-title">Where to Focus</span>
@@ -409,11 +412,14 @@
         <div id="suggestionsPanel"></div>
       </div>
     </details>
+    </div>
 
+    <div data-section="kpis" data-section-label="Ticket KPI tiles" style="display:flex; flex-direction:column; gap:28px;">
     <div class="kpi-grid" id="kpiGrid"></div>
     <div id="kpiDrilldownWrap"></div>
+    </div>
 
-    <div id="tierSection">
+    <div data-section="tierSection" id="tierSection">
       <div class="section-head">
         <h2 class="hero-title">Flagged tickets, by urgency</h2>
         <span class="section-note">Needs attention now (&le;48h since last activity) &middot; Aging (2&ndash;7 days) &middot; Long-stale backlog (7+ days) &middot; excludes GAL &amp; Gusto Incidents</span>
@@ -421,7 +427,7 @@
       <div class="panel" style="margin-top:12px;" id="tierChart"></div>
     </div>
 
-    <div id="assigneeSection">
+    <div data-section="assigneeSection" id="assigneeSection">
       <div class="section-head">
         <h2 class="section-title">Flagged tickets, by assignee</h2>
         <span class="section-note">Excludes GAL &amp; Gusto Incidents &middot; click an agent to expand their list &middot; use Copy list to export a plain-text list for that agent</span>
@@ -429,7 +435,7 @@
       <div class="panel" style="margin-top:12px;" id="assigneeChart"></div>
     </div>
 
-    <div id="backforthAssigneeSection">
+    <div data-section="backforthAssigneeSection" id="backforthAssigneeSection">
       <div class="section-head">
         <h2 class="section-title">Heavy back-and-forth, by assignee</h2>
         <span class="section-note">Not urgent by itself &mdash; long/complicated threads worth a look regardless of whose turn it is to reply &middot; excludes GAL &amp; Gusto Incidents</span>
@@ -438,7 +444,7 @@
       <div id="backforthSnoozed"></div>
     </div>
 
-    <div id="esPayrollSection">
+    <div data-section="esPayrollSection" id="esPayrollSection">
       <div class="section-head">
         <h2 class="section-title">ES Escalations (Payroll)</h2>
         <span class="section-note" id="esPayrollNote"></span>
@@ -446,7 +452,7 @@
       <div class="panel" style="margin-top:12px;" id="esPayrollList"></div>
     </div>
 
-    <div id="galSection">
+    <div data-section="galSection" id="galSection">
       <div class="section-head">
         <h2 class="section-title">With Dev Team (GAL)</h2>
         <span class="section-note" id="galNote"></span>
@@ -454,7 +460,7 @@
       <div class="panel" style="margin-top:12px;" id="galList"></div>
     </div>
 
-    <div id="gustoSection">
+    <div data-section="gustoSection" id="gustoSection">
       <div class="section-head">
         <h2 class="section-title">Gusto Incidents</h2>
         <span class="section-note" id="gustoNote"></span>
@@ -462,7 +468,7 @@
       <div class="panel" style="margin-top:12px;" id="gustoList"></div>
     </div>
 
-    <div id="tableSection">
+    <div data-section="tableSection" id="tableSection">
       <div class="section-head">
         <h2 class="section-title">Open Payroll tickets</h2>
         <span class="section-note">Excludes tickets With Dev Team (GAL) and Gusto Incidents &mdash; see those sections above</span>
@@ -501,7 +507,7 @@
       </div>
     </div>
 
-    <div id="trendSection">
+    <div data-section="trendSection" id="trendSection">
       <div class="section-head">
         <h2 class="section-title">Open &amp; flagged counts over time</h2>
         <span class="section-note" id="trendNote">Every poll run (7AM &amp; 11AM Pacific, weekdays)</span>
@@ -512,6 +518,7 @@
       </div>
     </div>
 
+    <div data-section="breakdowns" data-section-label="By status and by flag reason">
     <div class="breakdown-grid">
       <div>
         <div class="section-head"><h2 class="section-title">By status</h2><span class="section-note">Excludes GAL &amp; Gusto Incidents</span></div>
@@ -522,8 +529,9 @@
         <div class="panel" id="reasonChart" style="margin-top:12px;"></div>
       </div>
     </div>
+    </div>
 
-    <div id="offHoursSection">
+    <div data-section="offHoursSection" id="offHoursSection">
       <div class="section-head">
         <h2 class="section-title">Created off-hours or on a weekend</h2>
         <span class="section-note">All open tickets, GAL &amp; Gusto Incidents included &mdash; business hours is Payroll's real 6am-4pm M-F Pacific window</span>
@@ -531,6 +539,7 @@
       <div class="panel" style="margin-top:12px;" id="offHoursChart"></div>
     </div>
 
+    <div data-section="methodology" data-section-label="Methodology and scope notes">
     <details class="panel">
       <summary>Methodology &amp; scope notes</summary>
       <div class="method-body">
@@ -651,8 +660,9 @@
         </div>
       </div>
     </details>
+    </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.1</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.2</footer>
     </div>
   </div>
 </div>
@@ -1872,6 +1882,16 @@
     BQEBoard.signIn().catch(function (e) { showSignin(e.message); });
   });
   document.getElementById("signOutBtn").addEventListener("click", function () { BQEBoard.signOut(); });
+  // ---- Arrange: each person's section order, saved on the server so it follows them (bqe-board.js) ----
+  var layout = null;
+  document.getElementById("arrangeBtn").addEventListener("click", function () {
+    if (!layout) return;
+    var on = layout.toggle();
+    this.textContent = on ? "Done" : "Arrange";
+    this.setAttribute("aria-pressed", String(on));
+    document.getElementById("resetLayoutBtn").hidden = !on;
+  });
+  document.getElementById("resetLayoutBtn").addEventListener("click", function () { if (layout) layout.reset(); });
   BQEBoard.start({
     board: "payroll-watch",
     onSignIn: showSignin,
@@ -1882,6 +1902,7 @@
       document.getElementById("topbar").hidden = false;
       document.getElementById("viewerName").innerHTML = "Viewing: <b>" + escapeHtml(v.name) + "</b>";
       BQEBoard.presence(renderViewers);
+      if (!layout) layout = BQEBoard.arrange(document.getElementById("board"));
       load();
       if (!refreshTimer) refreshTimer = setInterval(load, REFRESH_MS);
     }

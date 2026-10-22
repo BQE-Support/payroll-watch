@@ -15,6 +15,7 @@
  *   BQEBoard.start({ board: "payroll-watch", onReady: function (viewer) {...}, onSignIn: function (msg) {...} })
  *   BQEBoard.api("payroll-watch")            -> JSON from /functions/v1/payroll-watch (with the board session)
  *   BQEBoard.presence(function (people) {})  -> people viewing this board now: [{ name, initials, me }]
+ *   BQEBoard.arrange(containerEl)            -> { toggle(), reset() }: movable [data-section] blocks, order saved per person
  *   BQEBoard.signIn() / BQEBoard.signOut()
  */
 (function () {
@@ -167,5 +168,103 @@
   }
   addEventListener("pagehide", stopPresence);
 
-  window.BQEBoard = { start: start, signIn: signIn, signOut: signOut, api: api, presence: presence, initialsOf: initialsOf, config: CONFIG };
+  // ---- Arrange: each person moves sections around; the order is saved per person per board on the server
+  // (public.dash_layouts through dash-auth), so it follows them to any device (2026-10-21).
+  // The board marks each movable block as a direct child of one container with data-section="<id>" (and,
+  // optionally, data-section-label). Sections must sit together in the container; anything before or after
+  // them (the heading, the footer) stays put. Sections missing from a saved order keep their default place.
+  var arr = { box: null, on: false, defaults: [], dragged: null, saveTimer: null };
+  var ARRANGE_CSS =
+    ".bqe-arranging [data-section]{outline:2px dashed var(--border,#ccc);outline-offset:6px;border-radius:10px}" +
+    ".bqe-arranging [data-section].bqe-drop-before{box-shadow:0 -4px 0 var(--accent,#3454D1)}" +
+    ".bqe-arranging [data-section].bqe-drop-after{box-shadow:0 4px 0 var(--accent,#3454D1)}" +
+    ".bqe-arrange-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;border-radius:8px;" +
+    "background:var(--accent-soft,#E7EBFB);color:var(--accent,#3454D1);font:600 12.5px -apple-system,Segoe UI,Roboto,Arial,sans-serif;cursor:grab;user-select:none}" +
+    ".bqe-arrange-bar:active{cursor:grabbing}.bqe-arrange-bar .bqe-grip{font-size:15px;letter-spacing:-2px}" +
+    ".bqe-arrange-bar span.bqe-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".bqe-arrange-bar button{border:1px solid currentColor;background:transparent;color:inherit;border-radius:6px;padding:2px 9px;font:inherit;cursor:pointer}";
+  function sectionEls() { return Array.prototype.filter.call(arr.box.children, function (el) { return el.hasAttribute("data-section"); }); }
+  function idOf(el) { return el.getAttribute("data-section"); }
+  function labelOf(el) {
+    if (el.getAttribute("data-section-label")) return el.getAttribute("data-section-label");
+    var h = el.querySelector("h1, h2, summary"); return h ? h.textContent.trim().replace(/\s+/g, " ").slice(0, 60) : idOf(el);
+  }
+  function placeInOrder(order) {
+    var els = sectionEls(), byId = {}; els.forEach(function (el) { byId[idOf(el)] = el; });
+    var ids = (order || []).filter(function (id, i, a) { return byId[id] && a.indexOf(id) === i; });
+    arr.defaults.forEach(function (id, i) { if (byId[id] && ids.indexOf(id) < 0) ids.splice(Math.min(i, ids.length), 0, id); });
+    var end = els[els.length - 1].nextSibling;
+    ids.forEach(function (id) { arr.box.insertBefore(byId[id], end); });
+  }
+  function saveOrder(order) {
+    clearTimeout(arr.saveTimer);
+    arr.saveTimer = setTimeout(function () {
+      api("dash-auth", { method: "POST", body: { action: "layout", board: opts.board, order: order } }).catch(function () {});
+    }, 400);
+  }
+  function currentOrder() { return sectionEls().map(idOf); }
+  function moved() { saveOrder(currentOrder()); if (arr.onChange) arr.onChange(); }
+  function addBars() {
+    sectionEls().forEach(function (el) {
+      if (el.querySelector(":scope > .bqe-arrange-bar")) return;
+      var bar = document.createElement("div");
+      bar.className = "bqe-arrange-bar"; bar.draggable = true;
+      bar.innerHTML = '<span class="bqe-grip" aria-hidden="true">⠇⠇</span><span class="bqe-name"></span>' +
+        '<button type="button" data-bqe-move="-1" aria-label="Move up">↑</button><button type="button" data-bqe-move="1" aria-label="Move down">↓</button>';
+      bar.querySelector(".bqe-name").textContent = labelOf(el);
+      el.insertBefore(bar, el.firstChild);
+    });
+  }
+  function removeBars() { Array.prototype.forEach.call(arr.box.querySelectorAll(".bqe-arrange-bar"), function (b) { b.remove(); }); }
+  function clearDrop() { sectionEls().forEach(function (el) { el.classList.remove("bqe-drop-before", "bqe-drop-after"); }); }
+  function wireArrange() {
+    arr.box.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-bqe-move]"); if (!b || !arr.on) return;
+      var el = b.closest("[data-section]"), els = sectionEls(), i = els.indexOf(el), d = +b.getAttribute("data-bqe-move");
+      var other = els[i + d]; if (!other) return;
+      if (d < 0) arr.box.insertBefore(el, other); else arr.box.insertBefore(other, el);
+      el.scrollIntoView({ block: "nearest" }); moved();
+    });
+    arr.box.addEventListener("dragstart", function (e) {
+      var bar = e.target.closest && e.target.closest(".bqe-arrange-bar"); if (!bar || !arr.on) return;
+      arr.dragged = bar.closest("[data-section]"); e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", idOf(arr.dragged)); } catch (x) {}
+    });
+    arr.box.addEventListener("dragover", function (e) {
+      if (!arr.dragged) return;
+      var el = e.target.closest && e.target.closest("[data-section]"); if (!el || el.parentNode !== arr.box || el === arr.dragged) return;
+      e.preventDefault(); clearDrop();
+      var r = el.getBoundingClientRect(); el.classList.add(e.clientY < r.top + r.height / 2 ? "bqe-drop-before" : "bqe-drop-after");
+    });
+    arr.box.addEventListener("drop", function (e) {
+      if (!arr.dragged) return;
+      var el = e.target.closest && e.target.closest("[data-section]");
+      if (el && el.parentNode === arr.box && el !== arr.dragged) {
+        e.preventDefault();
+        arr.box.insertBefore(arr.dragged, el.classList.contains("bqe-drop-before") ? el : el.nextSibling);
+        moved();
+      }
+      clearDrop(); arr.dragged = null;
+    });
+    arr.box.addEventListener("dragend", function () { clearDrop(); arr.dragged = null; });
+  }
+  // Sets up a board's sections and applies the person's saved order. Returns controls for the page's buttons.
+  function arrange(box, onChange) {
+    arr.box = box; arr.onChange = onChange;
+    arr.defaults = sectionEls().map(idOf);
+    if (!document.getElementById("bqe-arrange-css")) {
+      var st = document.createElement("style"); st.id = "bqe-arrange-css"; st.textContent = ARRANGE_CSS; document.head.appendChild(st);
+    }
+    wireArrange();
+    api("dash-auth?board=" + encodeURIComponent(opts.board)).then(function (j) {
+      if (j && j.layout && j.layout.order) placeInOrder(j.layout.order);
+    }).catch(function () {});
+    return {
+      toggle: function () { arr.on = !arr.on; box.classList.toggle("bqe-arranging", arr.on); if (arr.on) addBars(); else removeBars(); return arr.on; },
+      reset: function () { placeInOrder(arr.defaults.slice()); saveOrder(null); if (arr.onChange) arr.onChange(); },
+      isOn: function () { return arr.on; }
+    };
+  }
+
+  window.BQEBoard = { start: start, signIn: signIn, signOut: signOut, api: api, presence: presence, arrange: arrange, initialsOf: initialsOf, config: CONFIG };
 })();
