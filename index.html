@@ -685,7 +685,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.6</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; Payroll Watch 1.7</footer>
     </div>
   </div>
 </div>
@@ -1892,9 +1892,15 @@
     { label: "Median first reply", get: function (w) { return w.reply_median_min; }, dir: -1, fmt: "dur" },
     { label: "Median time to first solve", get: function (w) { return w.resolution_median_min; }, dir: -1, fmt: "dur" },
     { label: "Solved within 24 hours", get: function (w) { return w.solved ? Math.round(w.solved_24h / w.solved * 100) : null; }, dir: 1, fmt: "pct" },
+    { group: "Calls (Payroll Specialist queue)" },
+    { label: "Total calls", get: function (w) { return w.calls_direct === undefined ? null : w.calls_direct + w.calls_transferred + w.calls_missed; }, dir: 0 },
+    { label: "Direct to Payroll", get: function (w) { return w.calls_direct; }, dir: 0 },
+    { label: "Transferred in", get: function (w) { return w.calls_transferred; }, dir: 0 },
+    { label: "Missed", get: function (w) { return w.calls_missed; }, dir: -1 },
     { group: "Backlog at end of week" },
     { label: "Open tickets", get: function (w) { return w.backlog ? w.backlog.open : null; }, dir: -1 },
-    { label: "Flagged 7+ days", get: function (w) { return w.backlog ? w.backlog.stale : null; }, dir: -1 }
+    { label: "Flagged 7+ days", get: function (w) { return w.backlog ? w.backlog.stale : null; }, dir: -1 },
+    { label: "With Dev Team (GAL)", get: function (w) { return w.gal_open; }, dir: -1 }
   ];
   function wrDur(min) {
     if (min === null || min === undefined) return "n/a";
@@ -1931,7 +1937,9 @@
     });
     html += '</tbody></table><div class="wr-foot">Weeks run Monday to Sunday, Pacific. Payroll group tickets, all of them (GAL and Gusto Incidents included). ' +
       'Speed uses Zendesk calendar time for tickets solved that week; first reply is only known for ' + fmtNum(cur.reply_n) + ' of ' + fmtNum(cur.solved) + ' (' + fmtNum(prev.reply_n) + ' of ' + fmtNum(prev.solved) + ' the week before). ' +
-      'Backlog is the last hourly snapshot before the week ended: ' + escapeHtml(wrAsOf(cur)) + ' and ' + escapeHtml(wrAsOf(prev)) + '. Open counts every open ticket; Flagged 7+ days leaves out GAL and Gusto Incidents, like the tiles above.</div>';
+      'Backlog is the last hourly snapshot before the week ended: ' + escapeHtml(wrAsOf(cur)) + ' and ' + escapeHtml(wrAsOf(prev)) + '. Open counts every open ticket; Flagged 7+ days leaves out GAL and Gusto Incidents, like the tiles above. ' +
+      'With Dev Team (GAL) is rebuilt from ticket created and solved times, so it is the GAL tickets open when the week ended. ' +
+      'Calls split like the call tiles: direct means a Payroll queue agent answered first, transferred in means someone else did, missed means the caller hung up first.</div>';
     document.getElementById("weekReportBody").innerHTML = html;
   }
   function weekReportText() {
