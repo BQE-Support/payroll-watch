@@ -8,6 +8,12 @@
  *   2. the RingCX Live View's own saved sign-in, if its RingCX token is still good (no new sign-in needed);
  *   3. RingCentral sign-in (PKCE, same RingCentral app as the Live View). The board's address must be on the
  *      app's redirect list. Local testing on localhost uses the dev server's /dev-token instead.
+ *      People with no RingCX agent (RingEX only) get in with their RingCentral token instead.
+ *   4. Zendesk sign-in, for people with no RingCentral account (2026-11-02): BQEBoard.signIn("zendesk"). Zendesk
+ *      sends back a code that dash-auth trades for the person's Zendesk user (the client secret stays on the server).
+ *   5. Email + password (Supabase Auth, 2026-11-02): BQEBoard.emailSignIn(email, password). An invitation or
+ *      "forgot password" email links back to the board with a one-time token; the board then calls
+ *      opts.onSetPassword({ email, type }) and BQEBoard.setPassword(newPassword) finishes the sign-in.
  * Steps 2 and 3 end with the "dash-auth" function, which checks the RingCX token and public.dash_access and
  * returns a signed 12-hour board session. RingCentral/RingCX tokens are never saved by this file.
  *
@@ -28,7 +34,9 @@
     REDIRECT_URI: location.origin + location.pathname.replace(/index\.html$/, ""),
     STORE_KEY: "bqeBoards.session.v1",
     LIVE_VIEW_KEY: "rcxLiveView.session.v1",   // read only, never written
-    PKCE_KEY: "bqeBoards.pkce.v1"
+    PKCE_KEY: "bqeBoards.pkce.v1",
+    ZD_SERVER: "https://bqe.zendesk.com",
+    ZD_CLIENT_ID: "bqe_support_boards"    // Zendesk OAuth client (public identifier)
   };
   var IS_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   var opts = {}, session = null, pres = { client: null, channel: null, cb: null };
@@ -40,12 +48,18 @@
   function jwtExp(t) {
     try { var p = String(t).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return (JSON.parse(atob(p + "===".slice((p.length + 3) % 4))).exp || 0) * 1000; } catch (e) { return 0; }
   }
+  function agentOf(t) {
+    try { var p = String(t).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return String(JSON.parse(atob(p + "===".slice((p.length + 3) % 4))).agnt || ""); } catch (e) { return ""; }
+  }
   function initialsOf(n) { return String(n || "").split(/\s+/).filter(Boolean).map(function (p) { return p[0]; }).slice(0, 2).join("").toUpperCase(); }
   function usable(s) { return s && s.token && s.exp > Date.now() + 60000 && s.boards && s.boards[opts.board]; }
 
-  // RingCX access token -> board session (dash-auth checks it and the access table).
-  async function exchange(rcxAccess) {
-    var r = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/dash-auth", {
+  // RingCX access token (or a body: Zendesk code, Supabase Auth token) -> board session (dash-auth checks it and the access table).
+  async function exchange(rcxAccess, body) {
+    var r = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/dash-auth", body ? {
+      method: "POST", headers: { apikey: CONFIG.SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ redirectUri: CONFIG.REDIRECT_URI }, body))
+    } : {
       method: "POST", headers: { apikey: CONFIG.SUPABASE_ANON_KEY, "x-rcx-token": rcxAccess }
     });
     var j = await r.json().catch(function () { return {}; });
@@ -55,7 +69,15 @@
     return session;
   }
 
-  async function signIn() {
+  async function signIn(provider) {
+    if (provider === "zendesk") {
+      var zs = b64url(crypto.getRandomValues(new Uint8Array(16)));
+      try { sessionStorage.setItem(CONFIG.PKCE_KEY, JSON.stringify({ state: zs, provider: "zendesk" })); } catch (e) {}
+      location.href = CONFIG.ZD_SERVER + "/oauth/authorizations/new?" + form({
+        response_type: "code", client_id: CONFIG.ZD_CLIENT_ID, redirect_uri: CONFIG.REDIRECT_URI, scope: "read", state: zs
+      });
+      return;
+    }
     if (IS_LOCAL) {   // local testing: the dev server mints a RingCX token from the admin credential
       var d = await fetch("/dev-token");
       if (!d.ok) throw new Error("Dev token endpoint failed: HTTP " + d.status);
@@ -76,6 +98,7 @@
     var pk = null; try { pk = JSON.parse(sessionStorage.getItem(CONFIG.PKCE_KEY)); } catch (e) {}
     history.replaceState(null, "", CONFIG.REDIRECT_URI);
     if (!pk || pk.state !== state) throw new Error("Sign-in state mismatch. Please try again.");
+    if (pk.provider === "zendesk") { await exchange(null, { action: "zendesk", code: code }); return; }
     var r = await fetch(CONFIG.RC_SERVER + "/restapi/oauth/token", {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: form({ grant_type: "authorization_code", code: code, redirect_uri: CONFIG.REDIRECT_URI, client_id: CONFIG.CLIENT_ID, code_verifier: pk.verifier })
@@ -86,8 +109,68 @@
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: form({ rcAccessToken: rc.access_token, rcTokenType: "Bearer" })
     });
-    if (!x.ok) throw new Error("RingCentral sign-in worked, but RingCX refused it (HTTP " + x.status + "). Your RingCentral user may not have a RingCX account.");
-    await exchange((await x.json()).accessToken);
+    // RingEX-only users (no RingCX agent) sign in with their RingCentral token; dash-auth tells the two apart.
+    // RingCX can accept them and still return a token with no agent in it, so check for the agent ID too.
+    var rcx = x.ok ? ((await x.json().catch(function () { return {}; })).accessToken || "") : "";
+    await exchange(agentOf(rcx) ? rcx : rc.access_token);
+  }
+
+  // ---- Email + password (Supabase Auth). Supabase tokens are only passed on to dash-auth, never saved. ----
+  var AUTH = CONFIG.SUPABASE_URL + "/auth/v1", pendingPw = null;   // { token, type, email } from an emailed link
+  async function authCall(path, init, token) {
+    var h = { apikey: CONFIG.SUPABASE_ANON_KEY, "Content-Type": "application/json" };
+    if (token) h.Authorization = "Bearer " + token;
+    var r = await fetch(AUTH + path, Object.assign({ headers: h }, init));
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(j.error_description || j.msg || j.message || ("HTTP " + r.status));
+    return j;
+  }
+  async function emailSignIn(email, password) {
+    var j = await authCall("/token?grant_type=password", { method: "POST", body: JSON.stringify({ email: email, password: password }) })
+      .catch(function (e) { throw new Error(/invalid/i.test(e.message) ? "Wrong email or password." : e.message); });
+    await exchange(null, { action: "email", token: j.access_token });
+    ready();
+  }
+  async function emailReset(email) {
+    await authCall("/recover?redirect_to=" + encodeURIComponent(CONFIG.REDIRECT_URI), { method: "POST", body: JSON.stringify({ email: email }) });
+  }
+  async function setPassword(password) {
+    if (!pendingPw) throw new Error("This link has already been used. Ask for a new one with Forgot password.");
+    if (pendingPw.tokenHash) {
+      // The emailed code is only used here, when the person saves a password, so a mail scanner that opens the
+      // link can't use it up first (Sabreena's invite, 2026-11-02, was used 37 s after sending by Outlook's scanner).
+      var v = await authCall("/verify", { method: "POST", body: JSON.stringify({ type: pendingPw.type, token_hash: pendingPw.tokenHash }) })
+        .catch(function () { throw new Error("This link has expired or was already used. Use Forgot password to get a new one."); });
+      pendingPw.token = v.access_token; pendingPw.tokenHash = null;
+    }
+    await authCall("/user", { method: "PUT", body: JSON.stringify({ password: password }) }, pendingPw.token);
+    var t = pendingPw.token; pendingPw = null;
+    await exchange(null, { action: "email", token: t });
+    ready();
+  }
+  // An invitation or reset link lands with #access_token=...&type=invite|recovery (or #error_description=...).
+  // Since 2026-11-06 the invite and reset emails link with #token_hash=...&type=invite|recovery instead: nothing is
+  // used until the person saves a password (see setPassword), so link scanners can't spend it.
+  async function emailLinkInHash() {
+    if (!/access_token=|error_description=|token_hash=/.test(location.hash)) return false;
+    var h = new URLSearchParams(location.hash.slice(1));
+    history.replaceState(null, "", CONFIG.REDIRECT_URI);
+    if (h.get("token_hash") && (h.get("type") === "invite" || h.get("type") === "recovery")) {
+      pendingPw = { tokenHash: h.get("token_hash"), type: h.get("type"), email: "" };
+      if (opts.onSetPassword) opts.onSetPassword({ email: "", type: h.get("type") });
+      return true;
+    }
+    if (h.get("error_description")) throw new Error(h.get("error_description").replace(/\+/g, " ") + ". Use Forgot password to get a new link.");
+    var token = h.get("access_token"), type = h.get("type") || "";
+    var u = await authCall("/user", { method: "GET" }, token);
+    if (type === "invite" || type === "recovery") {
+      pendingPw = { token: token, type: type, email: u.email };
+      if (opts.onSetPassword) opts.onSetPassword({ email: u.email, type: type });
+      return true;
+    }
+    await exchange(null, { action: "email", token: token });   // any other emailed link signs them straight in
+    ready();
+    return true;
   }
 
   function ready() {
@@ -104,7 +187,8 @@
     try {
       var q = new URLSearchParams(location.search);
       if (q.get("code") && q.get("state")) { await finishSignIn(q.get("code"), q.get("state")); return ready(); }
-      if (q.get("error")) { history.replaceState(null, "", CONFIG.REDIRECT_URI); throw new Error("RingCentral sign-in was cancelled (" + q.get("error") + ")."); }
+      if (await emailLinkInHash()) return;
+      if (q.get("error")) { history.replaceState(null, "", CONFIG.REDIRECT_URI); throw new Error("Sign-in was cancelled (" + q.get("error") + ")."); }
       session = load(CONFIG.STORE_KEY);
       if (usable(session)) return ready();
       var live = load(CONFIG.LIVE_VIEW_KEY);
@@ -266,5 +350,5 @@
     };
   }
 
-  window.BQEBoard = { start: start, signIn: signIn, signOut: signOut, api: api, presence: presence, arrange: arrange, initialsOf: initialsOf, config: CONFIG };
+  window.BQEBoard = { start: start, signIn: signIn, emailSignIn: emailSignIn, emailReset: emailReset, setPassword: setPassword, signOut: signOut, api: api, presence: presence, arrange: arrange, initialsOf: initialsOf, config: CONFIG };
 })();

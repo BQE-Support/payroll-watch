@@ -250,6 +250,18 @@
   .wr-table tr.wr-group td { color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; padding-top: 14px; }
   .wr-better { color: var(--good); } .wr-worse { color: var(--critical); } .wr-same { color: var(--ink-3); }
   .wr-foot { margin-top: 12px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+  dialog.stats-dlg { width: min(900px, calc(100vw - 32px)); }
+  .stats-select { border: 1px solid var(--border); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: var(--sans); }
+  .st-sub { margin: 18px 0 0; font: 400 14px/1.2 var(--serif); color: var(--ink); }
+  .st-trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 10px; }
+  .st-trend { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface-alt); }
+  .st-trend .st-t-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); font-weight: 600; }
+  .st-trend .st-t-val { font: 400 18px/1.3 var(--serif); color: var(--ink); }
+  .st-trend svg { width: 100%; height: 44px; display: block; }
+  .st-trend .st-line { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+  .st-trend .st-dot { fill: var(--accent); }
+  .st-trend .st-dot-sel { fill: var(--critical); }
+  .stats-dlg td.st-muted { color: var(--ink-3); }
 
   .checkin-status { font-size: 11.5px; margin-top: 6px; }
   .checkin-status-done { color: var(--good); font-weight: 600; }
@@ -348,6 +360,7 @@
       <span class="viewers" id="viewers"></span>
       <span id="viewerName"></span>
       <button type="button" class="top-btn" id="weekReportBtn" hidden>Last week</button>
+      <button type="button" class="top-btn" id="statsBtn" title="Weekly Payroll support stats, Sunday to Saturday, with the week before and a trend">Stats</button>
       <button type="button" class="top-btn" id="arrangeBtn" title="Move sections around; your order is saved for you on every device">Arrange</button>
       <button type="button" class="top-btn" id="resetLayoutBtn" hidden>Reset layout</button>
       <button type="button" class="top-btn" id="themeBtn">Theme</button>
@@ -363,6 +376,18 @@
         </span>
       </div>
       <div id="weekReportBody"></div>
+    </dialog>
+
+    <dialog class="week-report stats-dlg" id="statsDlg">
+      <div class="wr-head">
+        <h2 class="section-title" id="statsTitle">Weekly stats</h2>
+        <span style="display:flex; gap:8px; align-items:center;">
+          <select id="statsWeek" class="stats-select" aria-label="Week"></select>
+          <button type="button" class="copy-btn" id="statsCopy">Copy stats</button>
+          <button type="button" class="copy-btn" id="statsClose">Close</button>
+        </span>
+      </div>
+      <div id="statsBody"><div class="wr-foot">Loading&hellip;</div></div>
     </dialog>
 
     <div class="signin" id="signin" hidden>
@@ -1963,6 +1988,167 @@
   document.getElementById("weekReportCopy").addEventListener("click", function () {
     var btn = this, text = weekReportText();
     function flash(ok) { btn.textContent = ok ? "Copied!" : "Copy failed"; btn.classList.toggle("copied", ok); setTimeout(function () { btn.textContent = "Copy report"; btn.classList.remove("copied"); }, 1800); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { flash(true); }).catch(function () { flash(false); });
+    else {
+      try {
+        var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        btn.closest("dialog").appendChild(ta); ta.select(); var ok = document.execCommand("copy"); ta.remove(); flash(ok);
+      } catch (err) { flash(false); }
+    }
+  });
+
+  // ---- Stats tab: one row per Sunday-Saturday Pacific week in pr_weekly_stats (payroll-stats function, Wednesdays) ----
+  // History = the long-window baseline the Payroll Support Meeting deck uses (not refreshed weekly).
+  // The Payroll team by Zendesk user id with their roles; names come from the saved stats, none are written here.
+  var ST_TEAM = [
+    ["30369866452631", "Full time L1"], ["29185321228183", "Part time L1"], ["38904670249495", "Part time L1"],
+    ["1503197040022", "Full time L2"], ["27012535712023", "Part time L2"]
+  ];
+  function stPct(x) { return x === null || x === undefined ? null : Math.round(x * 1000) / 10; }
+  function stShare(key) { return function (w) { return w.n ? Math.round(w.routing[key] / w.n * 1000) / 10 : null; }; }
+  function stCount(key) { return function (w) { return " (" + w.routing[key] + ")"; }; }
+  var ST_ROWS = [
+    { group: "Volume" },
+    { label: "Customer tickets created", get: function (w) { return w.n; }, dir: 0, fmt: "int" },
+    { label: "Of those, solved by the snapshot", get: function (w) { return w.resolution.solved; }, dir: 0, fmt: "int" },
+    { group: "Where tickets arrived from" },
+    { label: "Payroll Specialists", get: stShare("payroll"), extra: stCount("payroll"), dir: 0, fmt: "pct" },
+    { label: "CORE Phone", get: stShare("core_phone"), extra: stCount("core_phone"), dir: 0, fmt: "pct" },
+    { label: "Email Team", get: stShare("email_team"), extra: stCount("email_team"), dir: 0, fmt: "pct" },
+    { group: "Speed" },
+    { label: "First-reply SLA (within 120 business min of reaching Payroll)", get: function (w) { return stPct(w.sla.pct); }, extra: function (w) { return " (" + w.sla.within + " of " + w.sla.n + ")"; }, dir: 1, fmt: "pct", hist: 92.3 },
+    { label: "Median first reply (business min from creation)", get: function (w) { return w.first_reply.median_min; }, dir: -1, fmt: "min", hist: 41.0 },
+    { label: "Median resolution time", get: function (w) { return w.resolution.median_h; }, dir: -1, fmt: "h", hist: 45.9 },
+    { label: "Same-day close (share of all tickets)", get: function (w) { return stPct(w.same_day.share_all); }, dir: 1, fmt: "pct", hist: 20.5 },
+    { group: "Waits on other teams" },
+    { label: "Median L3 (ES) first-response wait", get: function (w) { return w.l3.median_h; }, extra: function (w) { return " (n=" + w.l3.responded + ")"; }, dir: -1, fmt: "h", hist: 20.9 },
+    { label: "Median Gusto reply wait", get: function (w) { return w.gusto.median_h; }, extra: function (w) { return " (n=" + w.gusto.replied + ")"; }, dir: -1, fmt: "h", hist: 32.0 }
+  ];
+  var ST = { weeks: null, idx: 0 };
+  function stFmt(row, v) {
+    if (v === null || v === undefined) return "n/a";
+    if (row.fmt === "pct") return v.toFixed(1) + "%";
+    if (row.fmt === "min") return v.toFixed(1) + " min";
+    if (row.fmt === "h") return v.toFixed(1) + "h";
+    return fmtNum(v);
+  }
+  function stVal(row, w) { var v = row.get(w); return stFmt(row, v) + (v !== null && v !== undefined && row.extra ? row.extra(w) : ""); }
+  function stChange(row, a, b) {
+    if (a === null || a === undefined || b === null || b === undefined) return { text: "", cls: "wr-same" };
+    var d = Math.round((a - b) * 10) / 10;
+    if (d === 0) return { text: "same", cls: "wr-same" };
+    var cls = !row.dir ? "wr-same" : (d > 0) === (row.dir > 0) ? "wr-better" : "wr-worse";
+    var unit = row.fmt === "pct" ? " pts" : row.fmt === "min" ? " min" : row.fmt === "h" ? "h" : "";
+    return { text: (d > 0 ? "+" : "-") + Math.abs(d).toFixed(row.fmt === "int" ? 0 : 1) + unit, cls: cls };
+  }
+  function stWeekLabel(wk) {
+    var s = wk.stats; return wrDate(s.week_start) + " to " + wrDate(s.week_end);
+  }
+  function stSpark(label, vals, sel, fmtv) {
+    var pts = vals.map(function (v, i) { return { v: v, i: i }; }).filter(function (p) { return p.v !== null && p.v !== undefined; });
+    if (pts.length < 2) return "";
+    var mn = Math.min.apply(null, pts.map(function (p) { return p.v; })), mx = Math.max.apply(null, pts.map(function (p) { return p.v; }));
+    var W = 180, H = 44, pad = 4, span = mx - mn || 1, n = vals.length - 1 || 1;
+    function X(i) { return pad + (W - 2 * pad) * i / n; }
+    function Y(v) { return H - pad - (H - 2 * pad) * (v - mn) / span; }
+    var line = pts.map(function (p) { return X(p.i).toFixed(1) + "," + Y(p.v).toFixed(1); }).join(" ");
+    var dots = pts.map(function (p) { return '<circle class="' + (p.i === sel ? "st-dot-sel" : "st-dot") + '" cx="' + X(p.i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="' + (p.i === sel ? 3.4 : 2) + '"></circle>'; }).join("");
+    var cur = vals[sel];
+    return '<div class="st-trend"><div class="st-t-label">' + escapeHtml(label) + '</div><div class="st-t-val">' + (cur === null || cur === undefined ? "n/a" : fmtv(cur)) + '</div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' + escapeHtml(label) + ' by week"><polyline class="st-line" points="' + line + '"></polyline>' + dots + '</svg></div>';
+  }
+  function stNames() {
+    var m = {};
+    (ST.weeks || []).slice().reverse().forEach(function (x) { ((x.stats && x.stats.agents) || []).forEach(function (a) { m[a.id] = a.name; }); });
+    return m;
+  }
+  function stAgentRows(w) {
+    var list = w && w.agents ? w.agents : null; if (!list) return null;
+    var names = stNames(), byId = {}; list.forEach(function (a) { byId[a.id] = a; });
+    var teamIds = {}; ST_TEAM.forEach(function (t) { teamIds[t[0]] = true; });
+    var rows = ST_TEAM.map(function (t) { var a = byId[t[0]]; return { name: names[t[0]] || "Payroll team member", role: t[1], updates: a ? a.updates : 0, solved: a ? a.solved : 0 }; });
+    var oth = { name: "Everyone else (staff)", role: "", updates: 0, solved: 0 };
+    list.forEach(function (a) { if (!teamIds[a.id] && a.name !== "Jira Integration") { oth.updates += a.updates; oth.solved += a.solved; } });
+    rows.push(oth);
+    return { rows: rows, unassigned: w.solved_unassigned || 0 };
+  }
+  function renderStats() {
+    var weeks = ST.weeks, cur = weeks[ST.idx], prev = weeks[ST.idx + 1] || null, w = cur.stats, p = prev ? prev.stats : null;
+    document.getElementById("statsTitle").textContent = "Weekly stats: " + stWeekLabel(cur);
+    var html = '<table class="wr-table"><thead><tr><th></th><th>' + stWeekLabel(cur) + '</th><th>' + (prev ? stWeekLabel(prev) : "No earlier week") + '</th><th>Change</th><th>History</th></tr></thead><tbody>';
+    ST_ROWS.forEach(function (row) {
+      if (row.group) { html += '<tr class="wr-group"><td colspan="5">' + escapeHtml(row.group) + '</td></tr>'; return; }
+      var a = row.get(w), b = p ? row.get(p) : null, c = stChange(row, a, b);
+      html += '<tr><td>' + escapeHtml(row.label) + '</td><td>' + escapeHtml(stVal(row, w)) + '</td><td>' + (p ? escapeHtml(stVal(row, p)) : "n/a") + '</td><td class="' + c.cls + '">' + c.text + '</td><td class="st-muted">' +
+        (row.hist !== undefined ? stFmt(row, row.hist) : "") + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    var ag = stAgentRows(w), agp = p ? stAgentRows(p) : null;
+    if (ag) {
+      html += '<h3 class="st-sub">Per agent</h3><table class="wr-table"><thead><tr><th>Agent</th><th>Updates</th><th>Solved</th><th>Updates, prior week</th><th>Solved, prior week</th></tr></thead><tbody>';
+      ag.rows.forEach(function (r, i) {
+        var q = agp ? agp.rows[i] : null;
+        html += '<tr><td>' + escapeHtml(r.name) + (r.role ? ' <span class="st-muted" style="font-size:11px;">' + escapeHtml(r.role) + '</span>' : "") + '</td><td>' + fmtNum(r.updates) + '</td><td>' + fmtNum(r.solved) + '</td><td class="st-muted">' + (q ? fmtNum(q.updates) : "n/a") + '</td><td class="st-muted">' + (q ? fmtNum(q.solved) : "n/a") + '</td></tr>';
+      });
+      html += '<tr><td class="st-muted">Solved with no assignee</td><td></td><td>' + fmtNum(ag.unassigned) + '</td><td></td><td class="st-muted">' + (agp ? fmtNum(agp.unassigned) : "n/a") + '</td></tr></tbody></table>';
+    }
+    var asc = weeks.slice().reverse(), sel = asc.length - 1 - ST.idx;
+    function series(fn) { return asc.map(function (x) { return fn(x.stats); }); }
+    html += '<h3 class="st-sub">Trend, last ' + asc.length + ' weeks</h3><div class="st-trends">' +
+      stSpark("Tickets created", series(function (s) { return s.n; }), sel, function (v) { return fmtNum(v); }) +
+      stSpark("First-reply SLA", series(function (s) { return stPct(s.sla.pct); }), sel, function (v) { return v.toFixed(1) + "%"; }) +
+      stSpark("Same-day close", series(function (s) { return stPct(s.same_day.share_all); }), sel, function (v) { return v.toFixed(1) + "%"; }) +
+      stSpark("Median resolution", series(function (s) { return s.resolution.median_h; }), sel, function (v) { return v.toFixed(1) + "h"; }) +
+      stSpark("Payroll Specialists share", series(function (s) { return s.n ? Math.round(s.routing.payroll / s.n * 1000) / 10 : null; }), sel, function (v) { return v.toFixed(1) + "%"; }) +
+      stSpark("Median Gusto reply wait", series(function (s) { return s.gusto.median_h; }), sel, function (v) { return v.toFixed(1) + "h"; }) + '</div>';
+    var asOf = new Date(cur.computed_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles", weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PT";
+    html += '<div class="wr-foot">Weeks run Sunday to Saturday, Pacific, and cover customer tickets created that week in the Payroll group (Gusto requester tickets and incidents left out). ' +
+      'Routing counts a ticket that a Payroll team member moved out of the Email Team queue as Payroll Specialists, and one moved by anyone else as Email Team. Business hours are Monday to Friday, 6am to 4pm Pacific. ' +
+      'The SLA clock starts when the ticket reached Payroll. L3 wait is the first response on the linked ES Jira issue; Gusto wait is from our first message on the Gusto incident to their reply. ' +
+      'Solved counts and medians are as of the snapshot (' + escapeHtml(asOf) + '), so a recent week will fill in as its tickets close. Updates are ticket events made by that person on Payroll tickets touched that week, counted from Zendesk ticket history, so they will not match the Zendesk Explore report exactly. ' +
+      'History is the long-window baseline from the meeting deck. Stats are saved every Wednesday morning for the week before.</div>';
+    document.getElementById("statsBody").innerHTML = html;
+  }
+  function statsText() {
+    var weeks = ST.weeks, cur = weeks[ST.idx], prev = weeks[ST.idx + 1] || null, w = cur.stats, p = prev ? prev.stats : null;
+    var lines = ["Payroll stats, week of " + stWeekLabel(cur) + (prev ? " (vs " + stWeekLabel(prev) + ")" : "")];
+    ST_ROWS.forEach(function (row) {
+      if (row.group) { lines.push("", row.group); return; }
+      var a = row.get(w), b = p ? row.get(p) : null, c = stChange(row, a, b);
+      lines.push("- " + row.label + ": " + stVal(row, w) + (p ? " (prior " + stVal(row, p) + (c.text && c.text !== "same" ? ", " + c.text : "") + ")" : "") + (row.hist !== undefined ? " [history " + stFmt(row, row.hist) + "]" : ""));
+    });
+    var ag = stAgentRows(w);
+    if (ag) {
+      lines.push("", "Per agent (updates, solved)");
+      ag.rows.forEach(function (r) { lines.push("- " + r.name + ": " + r.updates + " updates, " + r.solved + " solved"); });
+      lines.push("- Solved with no assignee: " + ag.unassigned);
+    }
+    return lines.join("\n");
+  }
+  function stFillPicker() {
+    var sel = document.getElementById("statsWeek");
+    sel.innerHTML = ST.weeks.map(function (x, i) { return '<option value="' + i + '">' + escapeHtml(stWeekLabel(x)) + '</option>'; }).join("");
+    sel.value = String(ST.idx);
+  }
+  document.getElementById("statsBtn").addEventListener("click", function () {
+    var dlg = document.getElementById("statsDlg");
+    dlg.showModal();
+    if (ST.weeks) return;
+    BQEBoard.api("payroll-watch?stats=1").then(function (j) {
+      var weeks = (j.weeks || []).filter(function (x) { return x.stats && x.stats.routing; });
+      if (!weeks.length) { document.getElementById("statsBody").innerHTML = '<div class="wr-foot">No weekly stats have been saved yet.</div>'; return; }
+      ST.weeks = weeks; ST.idx = 0; stFillPicker(); renderStats();
+    }).catch(function (e) {
+      document.getElementById("statsBody").innerHTML = '<div class="wr-foot">Could not load the stats: ' + escapeHtml(String(e && e.message || e)) + '</div>';
+    });
+  });
+  document.getElementById("statsWeek").addEventListener("change", function () { ST.idx = Number(this.value) || 0; renderStats(); });
+  document.getElementById("statsClose").addEventListener("click", function () { document.getElementById("statsDlg").close(); });
+  document.getElementById("statsDlg").addEventListener("click", function (e) { if (e.target === this) this.close(); });
+  document.getElementById("statsCopy").addEventListener("click", function () {
+    if (!ST.weeks) return;
+    var btn = this, text = statsText();
+    function flash(ok) { btn.textContent = ok ? "Copied!" : "Copy failed"; btn.classList.toggle("copied", ok); setTimeout(function () { btn.textContent = "Copy stats"; btn.classList.remove("copied"); }, 1800); }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { flash(true); }).catch(function () { flash(false); });
     else {
       try {
