@@ -52,7 +52,9 @@
     try { var p = String(t).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return String(JSON.parse(atob(p + "===".slice((p.length + 3) % 4))).agnt || ""); } catch (e) { return ""; }
   }
   function initialsOf(n) { return String(n || "").split(/\s+/).filter(Boolean).map(function (p) { return p[0]; }).slice(0, 2).join("").toUpperCase(); }
-  function usable(s) { return s && s.token && s.exp > Date.now() + 60000 && s.boards && s.boards[opts.board]; }
+  // board "*" (the Boards directory, 2026-11-25) = any board the person is listed on.
+  function hasBoard(s) { return opts.board === "*" ? Object.keys(s.boards).length > 0 : !!s.boards[opts.board]; }
+  function usable(s) { return s && s.token && s.exp > Date.now() + 60000 && s.boards && hasBoard(s); }
 
   // RingCX access token (or a body: Zendesk code, Supabase Auth token) -> board session (dash-auth checks it and the access table).
   async function exchange(rcxAccess, body) {
@@ -175,11 +177,11 @@
 
   function ready() {
     if (!usable(session)) {
-      var msg = session && session.boards && !session.boards[opts.board] ? "This board isn't shared with you. Ask your support lead for access." : "";
+      var msg = session && session.boards && !hasBoard(session) ? "This board isn't shared with you. Ask your support lead for access." : "";
       if (opts.onSignIn) opts.onSignIn(msg);
       return;
     }
-    if (opts.onReady) opts.onReady({ agentId: session.agentId, name: session.name, role: session.boards[opts.board] });
+    if (opts.onReady) opts.onReady({ agentId: session.agentId, name: session.name, role: session.boards[opts.board] || "viewer" });
   }
 
   async function start(o) {
@@ -351,4 +353,38 @@
   }
 
   window.BQEBoard = { start: start, signIn: signIn, emailSignIn: emailSignIn, emailReset: emailReset, setPassword: setPassword, signOut: signOut, api: api, presence: presence, arrange: arrange, initialsOf: initialsOf, config: CONFIG };
+})();
+
+/* "Support Boards" link back to the Boards directory (https://bqe-support.github.io/boards/), 2026-11-25.
+ * Shown only to people whose saved board session lists the "boards" page (dash_access board "boards"), so nobody
+ * gets a link that ends in "not shared with you". Placed first in the board's top bar (#topbar), or at the top of
+ * #app / .wrap on boards without one. Self-contained so it can sit at the end of any copy of this file. */
+(function () {
+  if (/\/boards\/?$/.test(location.pathname.replace(/index\.html$/, ""))) return;
+  function allowed() {
+    try {
+      var s = JSON.parse(localStorage.getItem("bqeBoards.session.v1") || "null");
+      return !!(s && s.exp > Date.now() && s.boards && s.boards.boards);
+    } catch (e) { return false; }
+  }
+  var href = location.hostname === "bqe-support.github.io" ? "/boards/" : "https://bqe-support.github.io/boards/";
+  function place() {
+    var have = document.getElementById("bqeBoardsLink");
+    if (!allowed()) { if (have) have.remove(); return; }
+    if (have) return;
+    var bar = document.getElementById("topbar"), a = document.createElement("a");
+    a.id = "bqeBoardsLink"; a.href = href; a.textContent = "← Support Boards"; a.title = "All the boards shared with you";
+    if (bar) {
+      a.className = "top-btn"; a.style.textDecoration = "none"; a.style.marginRight = "auto";
+      bar.insertBefore(a, bar.firstChild);
+    } else {
+      var host = document.getElementById("app") || document.querySelector(".wrap");
+      if (!host) return;
+      a.style.cssText = "display:inline-block; margin:0 0 10px; font:600 12px/1.4 -apple-system, 'Segoe UI', Roboto, sans-serif; color:var(--accent, #3454D1); text-decoration:none;";
+      host.insertBefore(a, host.firstChild);
+    }
+  }
+  // Sign-in finishes after load, and a sign-out clears the session, so check now and every few seconds.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", place); else place();
+  setInterval(place, 3000);
 })();
